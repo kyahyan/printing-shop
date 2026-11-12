@@ -1,36 +1,38 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Printing Shop Web Application (Clayjar Print Studio)
+
+A full-stack commercial printing shop platform built with **Next.js 16 (App Router)**, **HeroUI v3** (`@heroui/react` & `@heroui/styles`), **Tailwind CSS v4**, **Dark/Light Mode** (`next-themes`), and **Supabase** (`@supabase/ssr`, PostgreSQL, Row Level Security & Realtime).
+
+## Key Features
+
+- **Products & Price-Per-Size Catalog (`/products`)**: Click any printing product to inspect exact per-size pricing, `100+` and `500+` bulk discounts, paper/substrate multipliers, lamination options, and an instant price calculator.
+- **Inquiries & Custom Quotations (`/quotations`)**: Submit catalog or bespoke print inquiries and receive a unique `QT-YYYY-XXXX` Reference Number.
+- **Order & Quotation Reference Tracker (`/track`)**: Real-time lookup for `ORD-...`, `QT-...`, and `TKT-...` references with a 6-stage visual production pipeline and 1-click Quote-to-Order conversion.
+- **Customer Accounts (`/account`)**: Sign up and sign in via Supabase Auth to track orders, quotations, and support tickets.
+- **Live Customer Chat & Ticketing Queue (`/chat` + Floating Widget)**: Customers join a priority-aware live support queue (`TKT-XXXX`) with real-time queue position updates.
+- **Employee Dashboard (`/dashboard`)**: Protected staff workspace for responding to inquiries with formal quotations, taking walk-in/phone counter orders (POS), updating production stages, and claiming queued customer chats.
+- **Super Admin Dashboard (`/admin`)**: Protected admin command center for managing Products & Price-Per-Size matrices, Employee roles/accounts, and global Application Settings (shop branding, currency, VAT/tax, quotation validity, payment instructions, and chat queue rules).
 
 ## Getting Started
 
-First, run the development server:
+1. **Install dependencies:**
+   ```bash
+   npm install
+   ```
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+2. **Configure environment variables:**
+   Copy `.env.example` to `.env.local` and add your Supabase project URL and publishable key:
+   ```env
+   NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+   ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+3. **Initialize Supabase Database:**
+   Run the SQL scripts inside your Supabase SQL Editor in order:
+   1. `supabase/schema.sql` — Tables, Auth trigger, hardened RLS policies, indexes, and Realtime publications.
+   2. `supabase/seed.sql` — Initial print shop catalog and price-per-size tiers.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+4. **Run the development server:**
+   ```bash
+   npm run dev
+   ```
+   Open [http://localhost:3000](http://localhost:3000).
