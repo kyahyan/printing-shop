@@ -103,7 +103,7 @@ export default function HomePage() {
                   <input
                     value={refQuery}
                     onChange={(e) => setRefQuery(e.target.value)}
-                    placeholder="Enter Reference # (try QT-2026-4821 or ORD-2026-9104)"
+                    placeholder={`Enter Reference # (${settings.quotePrefix}-..., ${settings.orderPrefix}-..., or ${settings.ticketPrefix}-...)`}
                     className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted"
                   />
                 </div>
@@ -179,12 +179,12 @@ export default function HomePage() {
                 </div>
 
                 <div className="flex items-center justify-between border-t border-separator pt-3 text-xs text-muted">
-                  <span>Sample Ref: QT-2026-4821</span>
+                  <span>Have a Reference Number?</span>
                   <Link
-                    href="/track?ref=QT-2026-4821"
+                    href="/track"
                     className="font-semibold text-accent hover:underline"
                   >
-                    Inspect Sample Quote →
+                    Open Reference Tracker →
                   </Link>
                 </div>
               </Card>
@@ -216,97 +216,127 @@ export default function HomePage() {
           </Link>
         </div>
 
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {activeProducts.map((product) => {
-            const lowestSize = [...product.sizes].sort(
-              (a, b) => a.unitPrice - b.unitPrice
-            )[0];
-            return (
-              <Card
-                key={product.id}
-                onClick={() => setSelectedProduct(product)}
-                className="group cursor-pointer border border-separator bg-surface transition hover:-translate-y-1 hover:border-accent/60 hover:shadow-lg flex flex-col justify-between p-0 overflow-hidden"
-              >
-                <div>
-                  <div
-                    className={`border-b bg-gradient-to-br p-5 ${
-                      ACCENT_GRADIENTS[product.accentColor] ||
-                      ACCENT_GRADIENTS.indigo
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <Chip size="sm" color="default" variant="secondary">
-                        {product.category}
-                      </Chip>
-                      {product.badge && (
-                        <Chip size="sm" color="accent" variant="soft">
-                          {product.badge}
-                        </Chip>
-                      )}
-                    </div>
-                    <h3 className="mt-4 text-lg font-bold text-foreground group-hover:text-accent transition">
-                      {product.name}
-                    </h3>
-                    <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-muted">
-                      {product.shortDescription}
-                    </p>
-                  </div>
-
-                  {/* Preview of first 3 sizes right on card */}
-                  <div className="p-5 space-y-2.5">
-                    <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-muted">
-                      <span>Available Sizes ({product.sizes.length})</span>
-                      <span>Price ({product.baseUnit})</span>
-                    </div>
-                    <div className="space-y-1.5">
-                      {product.sizes.slice(0, 3).map((sz) => (
-                        <div
-                          key={sz.id}
-                          className="flex items-center justify-between rounded-lg bg-surface-secondary/60 px-2.5 py-1.5 text-xs"
-                        >
-                          <span className="truncate font-medium text-foreground pr-2">
-                            {sz.sizeLabel}
-                          </span>
-                          <span className="shrink-0 font-bold text-accent">
-                            {formatCurrency(sz.unitPrice)}
-                          </span>
-                        </div>
-                      ))}
-                      {product.sizes.length > 3 && (
-                        <div className="text-center text-[11px] text-muted pt-0.5">
-                          + {product.sizes.length - 3} more sizes & bulk
-                          discounts
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between border-t border-separator bg-surface-secondary/30 px-5 py-3.5">
+        {activeProducts.length === 0 ? (
+          <Card className="border border-dashed border-separator bg-surface p-12 text-center space-y-4">
+            <Layers className="mx-auto h-10 w-10 text-muted" />
+            <div className="space-y-1">
+              <h3 className="text-lg font-bold text-foreground">
+                No Catalog Products Published Yet
+              </h3>
+              <p className="mx-auto max-w-md text-sm text-muted">
+                Sign in to the Super Admin Dashboard to create your print
+                products and per-size pricing tiers, or request a custom
+                quotation right now.
+              </p>
+            </div>
+            <div className="flex flex-wrap justify-center gap-3">
+              <Link href="/quotations">
+                <Button variant="primary">
+                  <FileSpreadsheet className="h-4 w-4" />
+                  Request Custom Quotation
+                </Button>
+              </Link>
+              <Link href="/admin">
+                <Button variant="secondary">
+                  <ShieldCheck className="h-4 w-4" />
+                  Add Products in Super Admin
+                </Button>
+              </Link>
+            </div>
+          </Card>
+        ) : (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {activeProducts.map((product) => {
+              const lowestSize = [...product.sizes].sort(
+                (a, b) => a.unitPrice - b.unitPrice
+              )[0];
+              return (
+                <Card
+                  key={product.id}
+                  onClick={() => setSelectedProduct(product)}
+                  className="group cursor-pointer border border-separator bg-surface transition hover:-translate-y-1 hover:border-accent/60 hover:shadow-lg flex flex-col justify-between p-0 overflow-hidden"
+                >
                   <div>
-                    <div className="text-[10px] uppercase tracking-wider text-muted">
-                      Starts at
+                    <div
+                      className={`border-b bg-gradient-to-br p-5 ${
+                        ACCENT_GRADIENTS[product.accentColor] ||
+                        ACCENT_GRADIENTS.indigo
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <Chip size="sm" color="default" variant="secondary">
+                          {product.category}
+                        </Chip>
+                        {product.badge && (
+                          <Chip size="sm" color="accent" variant="soft">
+                            {product.badge}
+                          </Chip>
+                        )}
+                      </div>
+                      <h3 className="mt-4 text-lg font-bold text-foreground group-hover:text-accent transition">
+                        {product.name}
+                      </h3>
+                      <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-muted">
+                        {product.shortDescription}
+                      </p>
                     </div>
-                    <div className="text-base font-extrabold text-foreground">
-                      {lowestSize ? formatCurrency(lowestSize.unitPrice) : "—"}{" "}
-                      <span className="text-xs font-normal text-muted">
-                        {product.baseUnit}
-                      </span>
+
+                    {/* Preview of first 3 sizes right on card */}
+                    <div className="p-5 space-y-2.5">
+                      <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-muted">
+                        <span>Available Sizes ({product.sizes.length})</span>
+                        <span>Price ({product.baseUnit})</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {product.sizes.slice(0, 3).map((sz) => (
+                          <div
+                            key={sz.id}
+                            className="flex items-center justify-between rounded-lg bg-surface-secondary/60 px-2.5 py-1.5 text-xs"
+                          >
+                            <span className="truncate font-medium text-foreground pr-2">
+                              {sz.sizeLabel}
+                            </span>
+                            <span className="shrink-0 font-bold text-accent">
+                              {formatCurrency(sz.unitPrice)}
+                            </span>
+                          </div>
+                        ))}
+                        {product.sizes.length > 3 && (
+                          <div className="text-center text-[11px] text-muted pt-0.5">
+                            + {product.sizes.length - 3} more sizes & bulk
+                            discounts
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    onPress={() => setSelectedProduct(product)}
-                  >
-                    <Ruler className="h-3.5 w-3.5" />
-                    See Price Per Size
-                  </Button>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
+
+                  <div className="flex items-center justify-between border-t border-separator bg-surface-secondary/30 px-5 py-3.5">
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wider text-muted">
+                        Starts at
+                      </div>
+                      <div className="text-base font-extrabold text-foreground">
+                        {lowestSize ? formatCurrency(lowestSize.unitPrice) : "—"}{" "}
+                        <span className="text-xs font-normal text-muted">
+                          {product.baseUnit}
+                        </span>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      onPress={() => setSelectedProduct(product)}
+                    >
+                      <Ruler className="h-3.5 w-3.5" />
+                      See Price Per Size
+                    </Button>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {/* WORKFLOW PILLARS */}

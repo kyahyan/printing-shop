@@ -29,7 +29,6 @@ export interface UserProfile {
   department?: string;
   isActive: boolean;
   isOnline: boolean;
-  passwordHint?: string; // Used only for local preview mode before Supabase credentials are connected
   createdAt: string;
 }
 

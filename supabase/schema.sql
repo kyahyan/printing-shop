@@ -436,6 +436,47 @@ create policy "Read chat messages"
   to anon, authenticated
   using (true);
 
+-- Super Admin RPC to confirm & assign role when provisioning an Employee from /admin
+create or replace function public.admin_assign_staff_role(
+  target_user_id uuid,
+  target_full_name text,
+  target_phone text,
+  target_department text,
+  target_role text
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if (select auth.uid()) is null or not (select private.is_super_admin()) then
+    raise exception 'Forbidden: Super Admin privileges required.';
+  end if;
+
+  if target_role not in ('customer', 'employee', 'super_admin') then
+    raise exception 'Invalid role specified.';
+  end if;
+
+  update auth.users
+  set email_confirmed_at = coalesce(email_confirmed_at, now()),
+      raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || jsonb_build_object('role', target_role)
+  where id = target_user_id;
+
+  update public.profiles
+  set full_name = coalesce(nullif(target_full_name, ''), full_name),
+      phone = target_phone,
+      department = target_department,
+      role = target_role,
+      is_active = true,
+      is_online = true
+  where id = target_user_id;
+end;
+$$;
+
+revoke all on function public.admin_assign_staff_role(uuid, text, text, text, text) from public, anon;
+grant execute on function public.admin_assign_staff_role(uuid, text, text, text, text) to authenticated;
+
 -- Enable Realtime publication safely
 do $$
 begin
@@ -462,5 +503,17 @@ begin
     where pubname = 'supabase_realtime' and tablename = 'orders'
   ) then
     alter publication supabase_realtime add table public.orders;
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'products'
+  ) then
+    alter publication supabase_realtime add table public.products;
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'app_settings'
+  ) then
+    alter publication supabase_realtime add table public.app_settings;
   end if;
 end $$;

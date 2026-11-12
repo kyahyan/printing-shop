@@ -29,6 +29,7 @@ import type {
 
 export default function EmployeeDashboardPage() {
   const {
+    loading,
     currentUser,
     settings,
     products,
@@ -150,6 +151,12 @@ export default function EmployeeDashboardPage() {
   const [createdWalkInRef, setCreatedWalkInRef] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!posProductId && activeProducts[0]) {
+      setPosProductId(activeProducts[0].id);
+    }
+  }, [activeProducts, posProductId]);
+
+  useEffect(() => {
     if (posProduct) {
       setPosSizeId(posProduct.sizes[0]?.id ?? "");
       setPosMaterial(posProduct.materials[0]?.name ?? "");
@@ -178,6 +185,14 @@ export default function EmployeeDashboardPage() {
       setInternalNoteDraft(selectedTicket.internalNotes ?? "");
     }
   }, [selectedTicket]);
+
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-7xl px-4 py-20 text-center text-sm text-muted">
+        Loading Employee Operations Desk...
+      </div>
+    );
+  }
 
   if (!isAuthorized) {
     return (
@@ -499,51 +514,57 @@ export default function EmployeeDashboardPage() {
               </div>
 
               <div className="space-y-2.5 max-h-[620px] overflow-y-auto pr-1">
-                {filteredInquiries.map((inq) => {
-                  const active = selectedInquiry?.id === inq.id;
-                  return (
-                    <Card
-                      key={inq.id}
-                      onClick={() => setSelectedInquiryId(inq.id)}
-                      className={`cursor-pointer border p-4 transition ${
-                        active
-                          ? "border-accent bg-accent/8"
-                          : "border-separator bg-surface hover:border-accent/40"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-mono text-xs font-bold text-accent">
-                          {inq.referenceNumber}
-                        </span>
-                        <Chip
-                          size="sm"
-                          color={
-                            inq.status === "pending_review"
-                              ? "warning"
-                              : inq.status === "quoted"
-                              ? "success"
-                              : "accent"
-                          }
-                          variant="soft"
-                        >
-                          {inq.status.replace(/_/g, " ")}
-                        </Chip>
-                      </div>
-                      <div className="mt-1.5 text-sm font-bold text-foreground line-clamp-1">
-                        {inq.subject}
-                      </div>
-                      <div className="mt-1 text-xs text-muted">
-                        {inq.customerName} • Qty: {inq.quantity.toLocaleString()}{" "}
-                        • {inq.selectedSize}
-                      </div>
-                      {inq.quotedTotal != null && (
-                        <div className="mt-1.5 text-xs font-bold text-emerald-500">
-                          Quoted: {formatCurrency(inq.quotedTotal)}
+                {filteredInquiries.length === 0 ? (
+                  <Card className="border border-dashed border-separator bg-surface p-8 text-center text-xs text-muted">
+                    No inquiries found in this view yet.
+                  </Card>
+                ) : (
+                  filteredInquiries.map((inq) => {
+                    const active = selectedInquiry?.id === inq.id;
+                    return (
+                      <Card
+                        key={inq.id}
+                        onClick={() => setSelectedInquiryId(inq.id)}
+                        className={`cursor-pointer border p-4 transition ${
+                          active
+                            ? "border-accent bg-accent/8"
+                            : "border-separator bg-surface hover:border-accent/40"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-mono text-xs font-bold text-accent">
+                            {inq.referenceNumber}
+                          </span>
+                          <Chip
+                            size="sm"
+                            color={
+                              inq.status === "pending_review"
+                                ? "warning"
+                                : inq.status === "quoted"
+                                ? "success"
+                                : "accent"
+                            }
+                            variant="soft"
+                          >
+                            {inq.status.replace(/_/g, " ")}
+                          </Chip>
                         </div>
-                      )}
-                    </Card>
-                  );
-                })}
+                        <div className="mt-1.5 text-sm font-bold text-foreground line-clamp-1">
+                          {inq.subject}
+                        </div>
+                        <div className="mt-1 text-xs text-muted">
+                          {inq.customerName} • Qty:{" "}
+                          {inq.quantity.toLocaleString()} • {inq.selectedSize}
+                        </div>
+                        {inq.quotedTotal != null && (
+                          <div className="mt-1.5 text-xs font-bold text-emerald-500">
+                            Quoted: {formatCurrency(inq.quotedTotal)}
+                          </div>
+                        )}
+                      </Card>
+                    );
+                  })
+                )}
               </div>
             </div>
 
@@ -815,104 +836,116 @@ export default function EmployeeDashboardPage() {
             </div>
 
             {/* Line Item Selector */}
-            <div className="grid gap-3 rounded-xl bg-surface-secondary/50 p-4 sm:grid-cols-12 items-end">
-              <div className="sm:col-span-3">
-                <label className="mb-1 block text-xs font-medium text-muted">
-                  Product
-                </label>
-                <select
-                  value={posProductId}
-                  onChange={(e) => setPosProductId(e.target.value)}
-                  className="w-full rounded-xl border border-separator bg-surface px-3 py-2 text-xs text-foreground"
-                >
-                  {activeProducts.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
+            {activeProducts.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-separator bg-surface-secondary/40 p-6 text-center text-xs text-muted">
+                No active catalog products yet. Create products and size pricing
+                in{" "}
+                <Link href="/admin" className="font-semibold text-accent underline">
+                  Super Admin
+                </Link>{" "}
+                to enable counter POS order taking.
               </div>
+            ) : (
+              <div className="grid gap-3 rounded-xl bg-surface-secondary/50 p-4 sm:grid-cols-12 items-end">
+                <div className="sm:col-span-3">
+                  <label className="mb-1 block text-xs font-medium text-muted">
+                    Product
+                  </label>
+                  <select
+                    value={posProductId}
+                    onChange={(e) => setPosProductId(e.target.value)}
+                    className="w-full rounded-xl border border-separator bg-surface px-3 py-2 text-xs text-foreground"
+                  >
+                    {activeProducts.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-              <div className="sm:col-span-3">
-                <label className="mb-1 block text-xs font-medium text-muted">
-                  Size (Price Per Size)
-                </label>
-                <select
-                  value={posSizeId}
-                  onChange={(e) => setPosSizeId(e.target.value)}
-                  className="w-full rounded-xl border border-separator bg-surface px-3 py-2 text-xs text-foreground"
-                >
-                  {posProduct?.sizes.map((sz) => (
-                    <option key={sz.id} value={sz.id}>
-                      {sz.sizeLabel} ({formatCurrency(sz.unitPrice)})
-                    </option>
-                  ))}
-                </select>
-              </div>
+                <div className="sm:col-span-3">
+                  <label className="mb-1 block text-xs font-medium text-muted">
+                    Size (Price Per Size)
+                  </label>
+                  <select
+                    value={posSizeId}
+                    onChange={(e) => setPosSizeId(e.target.value)}
+                    className="w-full rounded-xl border border-separator bg-surface px-3 py-2 text-xs text-foreground"
+                  >
+                    {posProduct?.sizes.map((sz) => (
+                      <option key={sz.id} value={sz.id}>
+                        {sz.sizeLabel} ({formatCurrency(sz.unitPrice)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-              <div className="sm:col-span-2">
-                <label className="mb-1 block text-xs font-medium text-muted">
-                  Material
-                </label>
-                <select
-                  value={posMaterial}
-                  onChange={(e) => setPosMaterial(e.target.value)}
-                  className="w-full rounded-xl border border-separator bg-surface px-3 py-2 text-xs text-foreground"
-                >
-                  {posProduct?.materials.map((m) => (
-                    <option key={m.name} value={m.name}>
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-xs font-medium text-muted">
+                    Material
+                  </label>
+                  <select
+                    value={posMaterial}
+                    onChange={(e) => setPosMaterial(e.target.value)}
+                    className="w-full rounded-xl border border-separator bg-surface px-3 py-2 text-xs text-foreground"
+                  >
+                    {posProduct?.materials.map((m) => (
+                      <option key={m.name} value={m.name}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-              <div className="sm:col-span-2">
-                <label className="mb-1 block text-xs font-medium text-muted">
-                  Finish
-                </label>
-                <select
-                  value={posFinish}
-                  onChange={(e) => setPosFinish(e.target.value)}
-                  className="w-full rounded-xl border border-separator bg-surface px-3 py-2 text-xs text-foreground"
-                >
-                  {posProduct?.finishes.map((f) => (
-                    <option key={f.name} value={f.name}>
-                      {f.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-xs font-medium text-muted">
+                    Finish
+                  </label>
+                  <select
+                    value={posFinish}
+                    onChange={(e) => setPosFinish(e.target.value)}
+                    className="w-full rounded-xl border border-separator bg-surface px-3 py-2 text-xs text-foreground"
+                  >
+                    {posProduct?.finishes.map((f) => (
+                      <option key={f.name} value={f.name}>
+                        {f.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-              <div className="sm:col-span-1">
-                <label className="mb-1 block text-xs font-medium text-muted">
-                  Qty
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  value={posQty}
-                  onChange={(e) =>
-                    setPosQty(
-                      Math.max(1, Number.parseInt(e.target.value || "1", 10))
-                    )
-                  }
-                  className="w-full rounded-xl border border-separator bg-surface px-2.5 py-2 text-xs font-bold text-foreground"
-                />
-              </div>
+                <div className="sm:col-span-1">
+                  <label className="mb-1 block text-xs font-medium text-muted">
+                    Qty
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={posQty}
+                    onChange={(e) =>
+                      setPosQty(
+                        Math.max(1, Number.parseInt(e.target.value || "1", 10))
+                      )
+                    }
+                    className="w-full rounded-xl border border-separator bg-surface px-2.5 py-2 text-xs font-bold text-foreground"
+                  />
+                </div>
 
-              <div className="sm:col-span-1">
-                <Button
-                  size="sm"
-                  variant="primary"
-                  fullWidth
-                  onPress={handleAddPosItem}
-                >
-                  <Plus className="h-4 w-4" />
-                  Add
-                </Button>
+                <div className="sm:col-span-1">
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    fullWidth
+                    isDisabled={!posProduct}
+                    onPress={handleAddPosItem}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add
+                  </Button>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Draft Items + Customer Checkout */}
             {draftItems.length > 0 && (
@@ -1082,8 +1115,13 @@ export default function EmployeeDashboardPage() {
             <h2 className="text-lg font-bold text-foreground">
               Active Print Floor Orders ({orders.length})
             </h2>
-            <div className="space-y-3">
-              {orders.map((ord) => (
+            {orders.length === 0 ? (
+              <Card className="border border-dashed border-separator bg-surface p-8 text-center text-xs text-muted">
+                No production orders have been placed yet.
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {orders.map((ord) => (
                 <Card
                   key={ord.id}
                   className="border border-separator bg-surface p-5 space-y-3"
@@ -1171,10 +1209,11 @@ export default function EmployeeDashboardPage() {
                         </div>
                       </div>
                     </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
           </div>
         </Tabs.Panel>
 

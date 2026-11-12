@@ -8,6 +8,7 @@ import React, {
   useMemo,
   useState,
 } from "react";
+import { createClient } from "@supabase/supabase-js";
 import type {
   AppSettings,
   ChatMessage,
@@ -22,32 +23,36 @@ import type {
   TicketPriority,
   TicketStatus,
   UserProfile,
+  UserRole,
 } from "@/types/printshop";
 import {
-  INITIAL_INQUIRIES,
-  INITIAL_ORDERS,
-  INITIAL_PRODUCTS,
-  INITIAL_SETTINGS,
-  INITIAL_TICKETS,
-  INITIAL_USERS,
-} from "@/lib/seed-data";
-import {
   getSupabaseBrowserClient,
+  getSupabasePublicKey,
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
 
-const STORAGE_KEY = "clayjar_printshop_state_v1";
-const AUTH_STORAGE_KEY = "clayjar_current_user_id_v1";
-const CHANNEL_NAME = "clayjar_realtime_sync";
+const DEFAULT_SETTINGS: AppSettings = {
+  shopName: "Clayjar Print Studio",
+  tagline: "Precision Commercial Printing, Custom Packaging & Large Format",
+  currencyCode: "PHP",
+  currencySymbol: "₱",
+  taxRate: 12,
+  quotationValidityDays: 14,
+  orderPrefix: "ORD",
+  quotePrefix: "QT",
+  ticketPrefix: "TKT",
+  contactEmail: "hello@clayjar.com.ph",
+  contactPhone: "+63 (02) 8555-0194",
+  shopAddress: "Metro Manila, Philippines",
+  businessHours: "Mon – Sat: 8:30 AM – 6:30 PM",
+  paymentInstructions:
+    "50% downpayment required to initiate printing. Include your Order Reference Number in the payment note.",
+  autoAssignTickets: false,
+  maxActiveChatsPerEmployee: 5,
+};
 
-interface PersistedState {
-  settings: AppSettings;
-  users: UserProfile[];
-  products: Product[];
-  inquiries: InquiryQuotation[];
-  orders: Order[];
-  tickets: ChatTicket[];
-}
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface PriceBreakdown {
   effectiveUnitPrice: number;
@@ -101,7 +106,7 @@ interface OpenTicketInput {
 }
 
 interface PrintShopContextValue {
-  hydrated: boolean;
+  loading: boolean;
   supabaseConnected: boolean;
   settings: AppSettings;
   users: UserProfile[];
@@ -110,6 +115,7 @@ interface PrintShopContextValue {
   inquiries: InquiryQuotation[];
   orders: Order[];
   tickets: ChatTicket[];
+  refreshData: () => Promise<void>;
   formatCurrency: (amount: number) => string;
   calculateProductPrice: (
     product: Product,
@@ -136,7 +142,6 @@ interface PrintShopContextValue {
     user?: UserProfile;
     needsEmailConfirmation?: boolean;
   }>;
-  quickSwitchUser: (userId: string | null) => void;
   logout: () => Promise<void>;
   // Inquiries & Quotations
   submitInquiry: (input: CreateInquiryInput) => Promise<InquiryQuotation>;
@@ -202,13 +207,22 @@ interface PrintShopContextValue {
     }
   ) => Promise<void>;
   getQueuePosition: (ticketId: string) => number;
-  // Admin & Staff Controls
-  updateSettings: (next: AppSettings) => Promise<void>;
-  upsertProduct: (product: Product) => Promise<void>;
-  deleteProduct: (productId: string) => Promise<void>;
+  // Super Admin & Staff Database Controls
+  updateSettings: (next: AppSettings) => Promise<{ ok: boolean; error?: string }>;
+  upsertProduct: (
+    product: Product
+  ) => Promise<{ ok: boolean; error?: string; product?: Product }>;
+  deleteProduct: (productId: string) => Promise<{ ok: boolean; error?: string }>;
+  provisionStaffAccount: (input: {
+    fullName: string;
+    email: string;
+    phone: string;
+    department: string;
+    role: UserRole;
+    password: string;
+  }) => Promise<{ ok: boolean; error?: string }>;
   upsertUser: (user: UserProfile) => Promise<void>;
   toggleEmployeeOnline: (userId: string) => Promise<void>;
-  resetDemoData: () => void;
 }
 
 const PrintShopContext = createContext<PrintShopContextValue | null>(null);
@@ -220,139 +234,87 @@ function makeRandomDigits(len = 4): string {
 }
 
 export function PrintShopProvider({ children }: { children: React.ReactNode }) {
-  const [hydrated, setHydrated] = useState(false);
   const supabaseConnected = isSupabaseConfigured();
+  const [loading, setLoading] = useState(true);
 
-  const [state, setState] = useState<PersistedState>({
-    settings: INITIAL_SETTINGS,
-    users: INITIAL_USERS,
-    products: INITIAL_PRODUCTS,
-    inquiries: INITIAL_INQUIRIES,
-    orders: INITIAL_ORDERS,
-    tickets: INITIAL_TICKETS,
-  });
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [inquiries, setInquiries] = useState<InquiryQuotation[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [tickets, setTickets] = useState<ChatTicket[]>([]);
 
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-
-  // Hydrate from localStorage + BroadcastChannel listener
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as Partial<PersistedState>;
-        setState((prev) => ({
-          settings: parsed.settings ?? prev.settings,
-          users: parsed.users ?? prev.users,
-          products: parsed.products ?? prev.products,
-          inquiries: parsed.inquiries ?? prev.inquiries,
-          orders: parsed.orders ?? prev.orders,
-          tickets: parsed.tickets ?? prev.tickets,
-        }));
-      }
-      const savedUser = localStorage.getItem(AUTH_STORAGE_KEY);
-      if (savedUser) {
-        setCurrentUserId(savedUser);
-      }
-    } catch {
-      // Ignore malformed storage
-    }
-    setHydrated(true);
-
-    let bc: BroadcastChannel | null = null;
-    if (typeof window !== "undefined" && "BroadcastChannel" in window) {
-      bc = new BroadcastChannel(CHANNEL_NAME);
-      bc.onmessage = (ev) => {
-        if (ev.data?.type === "STATE_SYNC" && ev.data.payload) {
-          setState(ev.data.payload);
-        }
-      };
-    }
-    return () => {
-      bc?.close();
-    };
-  }, []);
-
-  // Optional live Supabase fetch + Realtime subscription when credentials exist
-  useEffect(() => {
+  const refreshData = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
-    if (!supabase) return;
+    if (!supabase) {
+      setLoading(false);
+      return;
+    }
 
-    let active = true;
+    const [
+      settingsRes,
+      productsRes,
+      inquiriesRes,
+      ordersRes,
+      ticketsRes,
+      profilesRes,
+    ] = await Promise.all([
+      supabase.from("app_settings").select("*").eq("id", 1).maybeSingle(),
+      supabase
+        .from("products")
+        .select("*, product_sizes(*)")
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("inquiries_quotations")
+        .select("*")
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("orders")
+        .select("*")
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("chat_tickets")
+        .select("*, chat_messages(*)")
+        .order("queued_at", { ascending: true }),
+      supabase
+        .from("profiles")
+        .select("*")
+        .order("created_at", { ascending: true }),
+    ]);
 
-    async function loadFromSupabase() {
-      if (!supabase) return;
-      const [
-        settingsRes,
-        productsRes,
-        inquiriesRes,
-        ordersRes,
-        ticketsRes,
-        profilesRes,
-      ] = await Promise.all([
-        supabase.from("app_settings").select("*").eq("id", 1).maybeSingle(),
-        supabase
-          .from("products")
-          .select("*, product_sizes(*)")
-          .order("created_at", { ascending: true }),
-        supabase
-          .from("inquiries_quotations")
-          .select("*")
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("orders")
-          .select("*")
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("chat_tickets")
-          .select("*, chat_messages(*)")
-          .order("queued_at", { ascending: true }),
-        supabase
-          .from("profiles")
-          .select("*")
-          .order("created_at", { ascending: true }),
-      ]);
+    if (settingsRes.data) {
+      const s = settingsRes.data;
+      setSettings({
+        shopName: s.shop_name,
+        tagline: s.tagline,
+        currencyCode: s.currency_code,
+        currencySymbol: s.currency_symbol,
+        taxRate: Number(s.tax_rate),
+        quotationValidityDays: s.quotation_validity_days,
+        orderPrefix: s.order_prefix,
+        quotePrefix: s.quote_prefix,
+        ticketPrefix: s.ticket_prefix,
+        contactEmail: s.contact_email,
+        contactPhone: s.contact_phone,
+        shopAddress: s.shop_address,
+        businessHours: s.business_hours,
+        paymentInstructions: s.payment_instructions,
+        autoAssignTickets: s.auto_assign_tickets,
+        maxActiveChatsPerEmployee: s.max_active_chats_per_employee,
+      });
+    }
 
-      if (!active) return;
-
-      setState((prev) => {
-        const next = { ...prev };
-        if (profilesRes.data && profilesRes.data.length > 0) {
-          next.users = profilesRes.data.map((u: Record<string, unknown>) => ({
-            id: String(u.id),
-            fullName: String(u.full_name),
-            email: String(u.email),
-            phone: u.phone ? String(u.phone) : "",
-            companyName: u.company_name ? String(u.company_name) : undefined,
-            role: (u.role as UserProfile["role"]) || "customer",
-            department: u.department ? String(u.department) : undefined,
-            isActive: Boolean(u.is_active ?? true),
-            isOnline: Boolean(u.is_online ?? false),
-            createdAt: String(u.created_at),
-          }));
-        }
-        if (settingsRes.data) {
-          const s = settingsRes.data;
-          next.settings = {
-            shopName: s.shop_name,
-            tagline: s.tagline,
-            currencyCode: s.currency_code,
-            currencySymbol: s.currency_symbol,
-            taxRate: Number(s.tax_rate),
-            quotationValidityDays: s.quotation_validity_days,
-            orderPrefix: s.order_prefix,
-            quotePrefix: s.quote_prefix,
-            ticketPrefix: s.ticket_prefix,
-            contactEmail: s.contact_email,
-            contactPhone: s.contact_phone,
-            shopAddress: s.shop_address,
-            businessHours: s.business_hours,
-            paymentInstructions: s.payment_instructions,
-            autoAssignTickets: s.auto_assign_tickets,
-            maxActiveChatsPerEmployee: s.max_active_chats_per_employee,
-          };
-        }
-        if (productsRes.data && productsRes.data.length > 0) {
-          next.products = productsRes.data.map((p: Record<string, unknown>) => ({
+    if (productsRes.data) {
+      setProducts(
+        productsRes.data.map((p: Record<string, unknown>) => {
+          const rawSizes = Array.isArray(p.product_sizes)
+            ? (p.product_sizes as Record<string, unknown>[])
+            : [];
+          const sortedSizes = [...rawSizes].sort(
+            (a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0)
+          );
+          return {
             id: String(p.id),
             slug: String(p.slug),
             name: String(p.name),
@@ -368,100 +330,122 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
             accentColor: (p.accent_color as Product["accentColor"]) || "indigo",
             materials: (p.materials as Product["materials"]) || [],
             finishes: (p.finishes as Product["finishes"]) || [],
-            sizes: Array.isArray(p.product_sizes)
-              ? p.product_sizes.map((sz: Record<string, unknown>) => ({
-                  id: String(sz.id),
-                  sizeLabel: String(sz.size_label),
-                  dimensions: String(sz.dimensions),
-                  unitPrice: Number(sz.unit_price),
-                  bulk100Price: sz.bulk_100_price
-                    ? Number(sz.bulk_100_price)
-                    : undefined,
-                  bulk500Price: sz.bulk_500_price
-                    ? Number(sz.bulk_500_price)
-                    : undefined,
-                  setupFee: Number(sz.setup_fee || 0),
-                }))
-              : [],
-          }));
-        }
-        if (inquiriesRes.data && inquiriesRes.data.length > 0) {
-          next.inquiries = inquiriesRes.data.map((q: Record<string, unknown>) => ({
-            id: String(q.id),
-            referenceNumber: String(q.reference_number),
-            customerId: q.customer_id ? String(q.customer_id) : undefined,
-            customerName: String(q.customer_name),
-            customerEmail: String(q.customer_email),
-            customerPhone: String(q.customer_phone),
-            companyName: q.company_name ? String(q.company_name) : undefined,
-            subject: String(q.subject),
-            productId: q.product_id ? String(q.product_id) : undefined,
-            productName: String(q.product_name),
-            selectedSize: String(q.selected_size),
-            material: String(q.material || ""),
-            finish: String(q.finish || ""),
-            quantity: Number(q.quantity),
-            customDimensions: q.custom_dimensions
-              ? String(q.custom_dimensions)
-              : undefined,
-            artworkUrl: q.artwork_url ? String(q.artwork_url) : undefined,
-            notes: q.notes ? String(q.notes) : undefined,
-            targetDate: q.target_date ? String(q.target_date) : undefined,
-            status: q.status as QuotationStatus,
-            quotedUnitPrice: q.quoted_unit_price
+            sizes: sortedSizes.map((sz) => ({
+              id: String(sz.id),
+              sizeLabel: String(sz.size_label),
+              dimensions: String(sz.dimensions),
+              unitPrice: Number(sz.unit_price),
+              bulk100Price:
+                sz.bulk_100_price != null
+                  ? Number(sz.bulk_100_price)
+                  : undefined,
+              bulk500Price:
+                sz.bulk_500_price != null
+                  ? Number(sz.bulk_500_price)
+                  : undefined,
+              setupFee: Number(sz.setup_fee || 0),
+            })),
+          };
+        })
+      );
+    }
+
+    if (inquiriesRes.data) {
+      setInquiries(
+        inquiriesRes.data.map((q: Record<string, unknown>) => ({
+          id: String(q.id),
+          referenceNumber: String(q.reference_number),
+          customerId: q.customer_id ? String(q.customer_id) : undefined,
+          customerName: String(q.customer_name),
+          customerEmail: String(q.customer_email),
+          customerPhone: String(q.customer_phone),
+          companyName: q.company_name ? String(q.company_name) : undefined,
+          subject: String(q.subject),
+          productId: q.product_id ? String(q.product_id) : undefined,
+          productName: String(q.product_name),
+          selectedSize: String(q.selected_size),
+          material: String(q.material || ""),
+          finish: String(q.finish || ""),
+          quantity: Number(q.quantity),
+          customDimensions: q.custom_dimensions
+            ? String(q.custom_dimensions)
+            : undefined,
+          artworkUrl: q.artwork_url ? String(q.artwork_url) : undefined,
+          notes: q.notes ? String(q.notes) : undefined,
+          targetDate: q.target_date ? String(q.target_date) : undefined,
+          status: q.status as QuotationStatus,
+          quotedUnitPrice:
+            q.quoted_unit_price != null
               ? Number(q.quoted_unit_price)
               : undefined,
-            quotedSetupFee: q.quoted_setup_fee
-              ? Number(q.quoted_setup_fee)
-              : undefined,
-            quotedDiscount: q.quoted_discount
-              ? Number(q.quoted_discount)
-              : undefined,
-            quotedTotal: q.quoted_total ? Number(q.quoted_total) : undefined,
-            staffRemarks: q.staff_remarks ? String(q.staff_remarks) : undefined,
-            validUntil: q.valid_until ? String(q.valid_until) : undefined,
-            handledBy: q.handled_by ? String(q.handled_by) : undefined,
-            handledByName: q.handled_by_name
-              ? String(q.handled_by_name)
-              : undefined,
-            createdAt: String(q.created_at),
-            updatedAt: String(q.updated_at),
-          }));
-        }
-        if (ordersRes.data && ordersRes.data.length > 0) {
-          next.orders = ordersRes.data.map((o: Record<string, unknown>) => ({
-            id: String(o.id),
-            referenceNumber: String(o.reference_number),
-            quotationId: o.quotation_id ? String(o.quotation_id) : undefined,
-            customerId: o.customer_id ? String(o.customer_id) : undefined,
-            customerName: String(o.customer_name),
-            customerEmail: String(o.customer_email),
-            customerPhone: String(o.customer_phone),
-            orderSource: o.order_source as Order["orderSource"],
-            items: (o.items as OrderItem[]) || [],
-            subtotal: Number(o.subtotal),
-            taxAmount: Number(o.tax_amount),
-            discountAmount: Number(o.discount_amount),
-            totalAmount: Number(o.total_amount),
-            amountPaid: Number(o.amount_paid),
-            paymentStatus: o.payment_status as PaymentStatus,
-            paymentMethod: String(o.payment_method),
-            productionStatus: o.production_status as ProductionStatus,
-            deliveryMethod: o.delivery_method as Order["deliveryMethod"],
-            notes: o.notes ? String(o.notes) : undefined,
-            takenByEmployeeId: o.taken_by_employee_id
-              ? String(o.taken_by_employee_id)
-              : undefined,
-            takenByName: o.taken_by_name ? String(o.taken_by_name) : undefined,
-            estimatedCompletion: o.estimated_completion
-              ? String(o.estimated_completion)
-              : undefined,
-            createdAt: String(o.created_at),
-            updatedAt: String(o.updated_at),
-          }));
-        }
-        if (ticketsRes.data && ticketsRes.data.length > 0) {
-          next.tickets = ticketsRes.data.map((t: Record<string, unknown>) => ({
+          quotedSetupFee:
+            q.quoted_setup_fee != null ? Number(q.quoted_setup_fee) : undefined,
+          quotedDiscount:
+            q.quoted_discount != null ? Number(q.quoted_discount) : undefined,
+          quotedTotal:
+            q.quoted_total != null ? Number(q.quoted_total) : undefined,
+          staffRemarks: q.staff_remarks ? String(q.staff_remarks) : undefined,
+          validUntil: q.valid_until ? String(q.valid_until) : undefined,
+          handledBy: q.handled_by ? String(q.handled_by) : undefined,
+          handledByName: q.handled_by_name
+            ? String(q.handled_by_name)
+            : undefined,
+          convertedOrderRef: q.converted_order_ref
+            ? String(q.converted_order_ref)
+            : undefined,
+          createdAt: String(q.created_at),
+          updatedAt: String(q.updated_at),
+        }))
+      );
+    }
+
+    if (ordersRes.data) {
+      setOrders(
+        ordersRes.data.map((o: Record<string, unknown>) => ({
+          id: String(o.id),
+          referenceNumber: String(o.reference_number),
+          quotationId: o.quotation_id ? String(o.quotation_id) : undefined,
+          customerId: o.customer_id ? String(o.customer_id) : undefined,
+          customerName: String(o.customer_name),
+          customerEmail: String(o.customer_email),
+          customerPhone: String(o.customer_phone),
+          orderSource: o.order_source as Order["orderSource"],
+          items: (o.items as OrderItem[]) || [],
+          subtotal: Number(o.subtotal),
+          taxAmount: Number(o.tax_amount),
+          discountAmount: Number(o.discount_amount),
+          totalAmount: Number(o.total_amount),
+          amountPaid: Number(o.amount_paid),
+          paymentStatus: o.payment_status as PaymentStatus,
+          paymentMethod: String(o.payment_method),
+          productionStatus: o.production_status as ProductionStatus,
+          deliveryMethod: o.delivery_method as Order["deliveryMethod"],
+          notes: o.notes ? String(o.notes) : undefined,
+          takenByEmployeeId: o.taken_by_employee_id
+            ? String(o.taken_by_employee_id)
+            : undefined,
+          takenByName: o.taken_by_name ? String(o.taken_by_name) : undefined,
+          estimatedCompletion: o.estimated_completion
+            ? String(o.estimated_completion)
+            : undefined,
+          createdAt: String(o.created_at),
+          updatedAt: String(o.updated_at),
+        }))
+      );
+    }
+
+    if (ticketsRes.data) {
+      setTickets(
+        ticketsRes.data.map((t: Record<string, unknown>) => {
+          const rawMsgs = Array.isArray(t.chat_messages)
+            ? (t.chat_messages as Record<string, unknown>[])
+            : [];
+          const sortedMsgs = [...rawMsgs].sort(
+            (a, b) =>
+              new Date(String(a.created_at)).getTime() -
+              new Date(String(b.created_at)).getTime()
+          );
+          return {
             id: String(t.id),
             ticketNumber: String(t.ticket_number),
             customerId: t.customer_id ? String(t.customer_id) : undefined,
@@ -485,34 +469,57 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
             queuedAt: String(t.queued_at),
             claimedAt: t.claimed_at ? String(t.claimed_at) : undefined,
             resolvedAt: t.resolved_at ? String(t.resolved_at) : undefined,
-            messages: Array.isArray(t.chat_messages)
-              ? t.chat_messages.map((m: Record<string, unknown>) => ({
-                  id: String(m.id),
-                  ticketId: String(m.ticket_id),
-                  senderRole: m.sender_role as ChatMessage["senderRole"],
-                  senderName: String(m.sender_name),
-                  message: String(m.message),
-                  createdAt: String(m.created_at),
-                }))
-              : [],
-          }));
-        }
-        return next;
-      });
+            messages: sortedMsgs.map((m) => ({
+              id: String(m.id),
+              ticketId: String(m.ticket_id),
+              senderRole: m.sender_role as ChatMessage["senderRole"],
+              senderName: String(m.sender_name),
+              message: String(m.message),
+              createdAt: String(m.created_at),
+            })),
+          };
+        })
+      );
     }
 
-    loadFromSupabase();
+    if (profilesRes.data) {
+      setUsers(
+        profilesRes.data.map((u: Record<string, unknown>) => ({
+          id: String(u.id),
+          fullName: String(u.full_name),
+          email: String(u.email),
+          phone: u.phone ? String(u.phone) : "",
+          companyName: u.company_name ? String(u.company_name) : undefined,
+          role: (u.role as UserProfile["role"]) || "customer",
+          department: u.department ? String(u.department) : undefined,
+          isActive: Boolean(u.is_active ?? true),
+          isOnline: Boolean(u.is_online ?? false),
+          createdAt: String(u.created_at),
+        }))
+      );
+    }
 
-    // Sync Supabase Auth session & profile across page reloads and auth events
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setLoading(false);
+      return;
+    }
+
+    let active = true;
+
     async function syncAuthUser() {
       if (!supabase || !active) return;
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!active) return;
+
       if (!user) {
-        setCurrentUserId(null);
-        localStorage.removeItem(AUTH_STORAGE_KEY);
+        setCurrentUser(null);
         return;
       }
 
@@ -544,29 +551,27 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
         createdAt: profile?.created_at || new Date().toISOString(),
       };
 
-      setState((prev) => ({
-        ...prev,
-        users: [mapped, ...prev.users.filter((u) => u.id !== mapped.id)],
-      }));
-      setCurrentUserId(mapped.id);
-      localStorage.setItem(AUTH_STORAGE_KEY, mapped.id);
+      setCurrentUser(mapped);
     }
 
-    syncAuthUser();
+    syncAuthUser().then(() => {
+      if (active) refreshData();
+    });
 
     const {
       data: { subscription: authSubscription },
     } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_OUT") {
-        setCurrentUserId(null);
-        localStorage.removeItem(AUTH_STORAGE_KEY);
+        setCurrentUser(null);
+        refreshData();
       } else if (
         event === "SIGNED_IN" ||
         event === "TOKEN_REFRESHED" ||
         event === "USER_UPDATED"
       ) {
-        syncAuthUser();
-        loadFromSupabase();
+        syncAuthUser().then(() => {
+          if (active) refreshData();
+        });
       }
     });
 
@@ -575,22 +580,32 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "chat_tickets" },
-        () => loadFromSupabase()
+        () => refreshData()
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "chat_messages" },
-        () => loadFromSupabase()
+        () => refreshData()
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "inquiries_quotations" },
-        () => loadFromSupabase()
+        () => refreshData()
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "orders" },
-        () => loadFromSupabase()
+        () => refreshData()
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "products" },
+        () => refreshData()
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "app_settings" },
+        () => refreshData()
       )
       .subscribe();
 
@@ -599,42 +614,17 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
       authSubscription.unsubscribe();
       supabase.removeChannel(channel);
     };
-  }, []);
-
-  const commitState = useCallback(
-    (updater: (prev: PersistedState) => PersistedState) => {
-      setState((prev) => {
-        const next = updater(prev);
-        try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-          if (typeof window !== "undefined" && "BroadcastChannel" in window) {
-            const bc = new BroadcastChannel(CHANNEL_NAME);
-            bc.postMessage({ type: "STATE_SYNC", payload: next });
-            bc.close();
-          }
-        } catch {
-          // Ignore storage quota errors
-        }
-        return next;
-      });
-    },
-    []
-  );
-
-  const currentUser = useMemo(
-    () => state.users.find((u) => u.id === currentUserId) ?? null,
-    [state.users, currentUserId]
-  );
+  }, [refreshData]);
 
   const formatCurrency = useCallback(
     (amount: number) => {
-      const sym = state.settings.currencySymbol || "₱";
+      const sym = settings.currencySymbol || "₱";
       return `${sym}${amount.toLocaleString("en-US", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       })}`;
     },
-    [state.settings.currencySymbol]
+    [settings.currencySymbol]
   );
 
   const calculateProductPrice = useCallback(
@@ -687,94 +677,67 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
   // AUTHENTICATION
   const login = useCallback(
     async (email: string, password: string, staffOnly = false) => {
-      const cleanEmail = email.trim().toLowerCase();
       const supabase = getSupabaseBrowserClient();
-
-      if (supabase) {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: cleanEmail,
-          password,
-        });
-        if (error || !data.user) {
-          return {
-            ok: false,
-            error: error?.message || "Invalid email or password.",
-          };
-        }
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", data.user.id)
-          .maybeSingle();
-
-        const mapped: UserProfile = {
-          id: data.user.id,
-          fullName:
-            profile?.full_name ||
-            data.user.user_metadata?.full_name ||
-            cleanEmail,
-          email: cleanEmail,
-          phone: profile?.phone || "",
-          companyName: profile?.company_name || undefined,
-          role: profile?.role || "customer",
-          department: profile?.department || undefined,
-          isActive: profile?.is_active ?? true,
-          isOnline: profile?.is_online ?? true,
-          createdAt: profile?.created_at || new Date().toISOString(),
-        };
-
-        if (staffOnly && mapped.role === "customer") {
-          await supabase.auth.signOut();
-          return {
-            ok: false,
-            error: "This portal is restricted to authorized Print Shop Staff.",
-          };
-        }
-
-        commitState((prev) => ({
-          ...prev,
-          users: [mapped, ...prev.users.filter((u) => u.id !== mapped.id)],
-        }));
-        setCurrentUserId(mapped.id);
-        localStorage.setItem(AUTH_STORAGE_KEY, mapped.id);
-        return { ok: true, user: mapped };
+      if (!supabase) {
+        return { ok: false, error: "Supabase client is not configured." };
       }
 
-      // Local preview auth before Supabase credentials are connected
-      const found = state.users.find(
-        (u) => u.email.toLowerCase() === cleanEmail
-      );
-      if (!found) {
+      const cleanEmail = email.trim().toLowerCase();
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password,
+      });
+
+      if (error || !data.user) {
         return {
           ok: false,
-          error: "No account found with that email address.",
+          error: error?.message || "Invalid email or password.",
         };
       }
-      if (!found.isActive) {
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", data.user.id)
+        .maybeSingle();
+
+      const mapped: UserProfile = {
+        id: data.user.id,
+        fullName:
+          profile?.full_name ||
+          data.user.user_metadata?.full_name ||
+          cleanEmail,
+        email: cleanEmail,
+        phone: profile?.phone || "",
+        companyName: profile?.company_name || undefined,
+        role: profile?.role || "customer",
+        department: profile?.department || undefined,
+        isActive: profile?.is_active ?? true,
+        isOnline: profile?.is_online ?? true,
+        createdAt: profile?.created_at || new Date().toISOString(),
+      };
+
+      if (!mapped.isActive) {
+        await supabase.auth.signOut();
         return {
           ok: false,
           error: "This account has been deactivated by an administrator.",
         };
       }
-      if (found.passwordHint && password !== found.passwordHint) {
+
+      if (staffOnly && mapped.role === "customer") {
+        await supabase.auth.signOut();
         return {
           ok: false,
-          error: "Incorrect password. Check the demo credentials card or reset.",
-        };
-      }
-      if (staffOnly && found.role === "customer") {
-        return {
-          ok: false,
-          error:
-            "Customer accounts cannot sign in to the Staff Portal. Use /account instead.",
+          error: "This portal is restricted to authorized Print Shop Staff.",
         };
       }
 
-      setCurrentUserId(found.id);
-      localStorage.setItem(AUTH_STORAGE_KEY, found.id);
-      return { ok: true, user: found };
+      setCurrentUser(mapped);
+      await refreshData();
+      return { ok: true, user: mapped };
     },
-    [commitState, state.users]
+    [refreshData]
   );
 
   const registerCustomer = useCallback(
@@ -785,68 +748,39 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
       companyName?: string;
       password: string;
     }) => {
-      const cleanEmail = input.email.trim().toLowerCase();
       const supabase = getSupabaseBrowserClient();
-
-      if (supabase) {
-        const redirectBase =
-          typeof window !== "undefined" ? window.location.origin : "";
-        const { data, error } = await supabase.auth.signUp({
-          email: cleanEmail,
-          password: input.password,
-          options: {
-            emailRedirectTo: redirectBase
-              ? `${redirectBase}/auth/callback?next=/account`
-              : undefined,
-            data: {
-              full_name: input.fullName,
-              phone: input.phone,
-              company_name: input.companyName,
-            },
-          },
-        });
-        if (error || !data.user) {
-          return {
-            ok: false,
-            error: error?.message || "Could not create account.",
-          };
-        }
-        const newUser: UserProfile = {
-          id: data.user.id,
-          fullName: input.fullName,
-          email: cleanEmail,
-          phone: input.phone,
-          companyName: input.companyName,
-          role: "customer",
-          isActive: true,
-          isOnline: false,
-          createdAt: new Date().toISOString(),
-        };
-        if (!data.session) {
-          return {
-            ok: true,
-            user: newUser,
-            needsEmailConfirmation: true,
-          };
-        }
-        commitState((prev) => ({ ...prev, users: [...prev.users, newUser] }));
-        setCurrentUserId(newUser.id);
-        localStorage.setItem(AUTH_STORAGE_KEY, newUser.id);
-        return { ok: true, user: newUser };
+      if (!supabase) {
+        return { ok: false, error: "Supabase client is not configured." };
       }
 
-      const exists = state.users.some(
-        (u) => u.email.toLowerCase() === cleanEmail
-      );
-      if (exists) {
+      const cleanEmail = input.email.trim().toLowerCase();
+      const redirectBase =
+        typeof window !== "undefined" ? window.location.origin : "";
+
+      const { data, error } = await supabase.auth.signUp({
+        email: cleanEmail,
+        password: input.password,
+        options: {
+          emailRedirectTo: redirectBase
+            ? `${redirectBase}/auth/callback?next=/account`
+            : undefined,
+          data: {
+            full_name: input.fullName.trim(),
+            phone: input.phone.trim(),
+            company_name: input.companyName?.trim() || null,
+          },
+        },
+      });
+
+      if (error || !data.user) {
         return {
           ok: false,
-          error: "An account with this email already exists.",
+          error: error?.message || "Could not create account.",
         };
       }
 
       const newUser: UserProfile = {
-        id: `usr-${Date.now()}`,
+        id: data.user.id,
         fullName: input.fullName.trim(),
         email: cleanEmail,
         phone: input.phone.trim(),
@@ -854,107 +788,99 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
         role: "customer",
         isActive: true,
         isOnline: false,
-        passwordHint: input.password,
         createdAt: new Date().toISOString(),
       };
 
-      commitState((prev) => ({
-        ...prev,
-        users: [...prev.users, newUser],
-      }));
-      setCurrentUserId(newUser.id);
-      localStorage.setItem(AUTH_STORAGE_KEY, newUser.id);
+      if (!data.session) {
+        return { ok: true, user: newUser, needsEmailConfirmation: true };
+      }
+
+      setCurrentUser(newUser);
+      await refreshData();
       return { ok: true, user: newUser };
     },
-    [commitState, state.users]
+    [refreshData]
   );
-
-  const quickSwitchUser = useCallback((userId: string | null) => {
-    setCurrentUserId(userId);
-    if (userId) {
-      localStorage.setItem(AUTH_STORAGE_KEY, userId);
-    } else {
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-    }
-  }, []);
 
   const logout = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
     if (supabase) {
       await supabase.auth.signOut();
     }
-    setCurrentUserId(null);
-    localStorage.removeItem(AUTH_STORAGE_KEY);
+    setCurrentUser(null);
   }, []);
 
   // INQUIRIES & QUOTATIONS
   const submitInquiry = useCallback(
     async (input: CreateInquiryInput): Promise<InquiryQuotation> => {
-      const year = new Date().getFullYear();
-      const ref = `${state.settings.quotePrefix || "QT"}-${year}-${makeRandomDigits(4)}`;
-      const now = new Date().toISOString();
-
-      const newInquiry: InquiryQuotation = {
-        id: `inq-${Date.now()}`,
-        referenceNumber: ref,
-        customerId:
-          currentUser?.role === "customer" ? currentUser.id : undefined,
-        customerName: input.customerName,
-        customerEmail: input.customerEmail,
-        customerPhone: input.customerPhone,
-        companyName: input.companyName,
-        subject: input.subject,
-        productId: input.productId,
-        productName: input.productName,
-        selectedSize: input.selectedSize,
-        material: input.material,
-        finish: input.finish,
-        quantity: input.quantity,
-        customDimensions: input.customDimensions,
-        artworkUrl: input.artworkUrl,
-        notes: input.notes,
-        targetDate: input.targetDate,
-        status: "pending_review",
-        createdAt: now,
-        updatedAt: now,
-      };
-
       const supabase = getSupabaseBrowserClient();
-      if (supabase) {
-        const { data } = await supabase
-          .from("inquiries_quotations")
-          .insert({
-            reference_number: ref,
-            customer_id: newInquiry.customerId ?? null,
-            customer_name: newInquiry.customerName,
-            customer_email: newInquiry.customerEmail,
-            customer_phone: newInquiry.customerPhone,
-            company_name: newInquiry.companyName ?? null,
-            subject: newInquiry.subject,
-            product_id: null,
-            product_name: newInquiry.productName,
-            selected_size: newInquiry.selectedSize,
-            material: newInquiry.material,
-            finish: newInquiry.finish,
-            quantity: newInquiry.quantity,
-            custom_dimensions: newInquiry.customDimensions ?? null,
-            artwork_url: newInquiry.artworkUrl ?? null,
-            notes: newInquiry.notes ?? null,
-            target_date: newInquiry.targetDate || null,
-            status: "pending_review",
-          })
-          .select()
-          .maybeSingle();
-        if (data?.id) newInquiry.id = String(data.id);
+      if (!supabase) throw new Error("Database not connected");
+
+      const year = new Date().getFullYear();
+      const ref = `${settings.quotePrefix || "QT"}-${year}-${makeRandomDigits(4)}`;
+
+      const validProductId =
+        input.productId && UUID_REGEX.test(input.productId)
+          ? input.productId
+          : null;
+
+      const { data, error } = await supabase
+        .from("inquiries_quotations")
+        .insert({
+          reference_number: ref,
+          customer_id: currentUser ? currentUser.id : null,
+          customer_name: input.customerName,
+          customer_email: input.customerEmail,
+          customer_phone: input.customerPhone,
+          company_name: input.companyName ?? null,
+          subject: input.subject,
+          product_id: validProductId,
+          product_name: input.productName,
+          selected_size: input.selectedSize,
+          material: input.material,
+          finish: input.finish,
+          quantity: input.quantity,
+          custom_dimensions: input.customDimensions ?? null,
+          artwork_url: input.artworkUrl ?? null,
+          notes: input.notes ?? null,
+          target_date: input.targetDate || null,
+          status: "pending_review",
+        })
+        .select()
+        .single();
+
+      if (error || !data) {
+        throw new Error(error?.message || "Failed to save inquiry.");
       }
 
-      commitState((prev) => ({
-        ...prev,
-        inquiries: [newInquiry, ...prev.inquiries],
-      }));
-      return newInquiry;
+      await refreshData();
+      return {
+        id: String(data.id),
+        referenceNumber: String(data.reference_number),
+        customerId: data.customer_id ? String(data.customer_id) : undefined,
+        customerName: String(data.customer_name),
+        customerEmail: String(data.customer_email),
+        customerPhone: String(data.customer_phone),
+        companyName: data.company_name ? String(data.company_name) : undefined,
+        subject: String(data.subject),
+        productId: data.product_id ? String(data.product_id) : undefined,
+        productName: String(data.product_name),
+        selectedSize: String(data.selected_size),
+        material: String(data.material || ""),
+        finish: String(data.finish || ""),
+        quantity: Number(data.quantity),
+        customDimensions: data.custom_dimensions
+          ? String(data.custom_dimensions)
+          : undefined,
+        artworkUrl: data.artwork_url ? String(data.artwork_url) : undefined,
+        notes: data.notes ? String(data.notes) : undefined,
+        targetDate: data.target_date ? String(data.target_date) : undefined,
+        status: data.status as QuotationStatus,
+        createdAt: String(data.created_at),
+        updatedAt: String(data.updated_at),
+      };
     },
-    [commitState, currentUser, state.settings.quotePrefix]
+    [currentUser, refreshData, settings.quotePrefix]
   );
 
   const sendQuotation = useCallback(
@@ -968,8 +894,9 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
         validUntil: string;
       }
     ) => {
-      const target = state.inquiries.find((i) => i.id === inquiryId);
-      if (!target) return;
+      const supabase = getSupabaseBrowserClient();
+      const target = inquiries.find((i) => i.id === inquiryId);
+      if (!supabase || !target) return;
 
       const gross =
         quote.quotedUnitPrice * target.quantity + quote.quotedSetupFee;
@@ -977,76 +904,49 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
         0,
         Number((gross - quote.quotedDiscount).toFixed(2))
       );
-      const now = new Date().toISOString();
 
-      const supabase = getSupabaseBrowserClient();
-      if (supabase) {
-        await supabase
-          .from("inquiries_quotations")
-          .update({
-            status: "quoted",
-            quoted_unit_price: quote.quotedUnitPrice,
-            quoted_setup_fee: quote.quotedSetupFee,
-            quoted_discount: quote.quotedDiscount,
-            quoted_total: quotedTotal,
-            staff_remarks: quote.staffRemarks,
-            valid_until: quote.validUntil || null,
-            handled_by_name: currentUser?.fullName || "Print Estimator",
-            updated_at: now,
-          })
-          .eq("id", inquiryId);
-      }
+      await supabase
+        .from("inquiries_quotations")
+        .update({
+          status: "quoted",
+          quoted_unit_price: quote.quotedUnitPrice,
+          quoted_setup_fee: quote.quotedSetupFee,
+          quoted_discount: quote.quotedDiscount,
+          quoted_total: quotedTotal,
+          staff_remarks: quote.staffRemarks,
+          valid_until: quote.validUntil || null,
+          handled_by: currentUser?.id ?? null,
+          handled_by_name: currentUser?.fullName || "Print Estimator",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", inquiryId);
 
-      commitState((prev) => ({
-        ...prev,
-        inquiries: prev.inquiries.map((inq) =>
-          inq.id === inquiryId
-            ? {
-                ...inq,
-                status: "quoted",
-                quotedUnitPrice: quote.quotedUnitPrice,
-                quotedSetupFee: quote.quotedSetupFee,
-                quotedDiscount: quote.quotedDiscount,
-                quotedTotal,
-                staffRemarks: quote.staffRemarks,
-                validUntil: quote.validUntil,
-                handledBy: currentUser?.id,
-                handledByName: currentUser?.fullName || "Print Estimator",
-                updatedAt: now,
-              }
-            : inq
-        ),
-      }));
+      await refreshData();
     },
-    [commitState, currentUser, state.inquiries]
+    [currentUser, inquiries, refreshData]
   );
 
   const updateInquiryStatus = useCallback(
     async (inquiryId: string, status: QuotationStatus) => {
-      const now = new Date().toISOString();
       const supabase = getSupabaseBrowserClient();
-      if (supabase) {
-        await supabase
-          .from("inquiries_quotations")
-          .update({ status, updated_at: now })
-          .eq("id", inquiryId);
-      }
-      commitState((prev) => ({
-        ...prev,
-        inquiries: prev.inquiries.map((inq) =>
-          inq.id === inquiryId ? { ...inq, status, updatedAt: now } : inq
-        ),
-      }));
+      if (!supabase) return;
+      await supabase
+        .from("inquiries_quotations")
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq("id", inquiryId);
+      await refreshData();
     },
-    [commitState]
+    [refreshData]
   );
 
   // ORDERS
   const createOrder = useCallback(
     async (input: CreateOrderInput): Promise<Order> => {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) throw new Error("Database not connected");
+
       const year = new Date().getFullYear();
-      const ref = `${state.settings.orderPrefix || "ORD"}-${year}-${makeRandomDigits(4)}`;
-      const now = new Date().toISOString();
+      const ref = `${settings.orderPrefix || "ORD"}-${year}-${makeRandomDigits(4)}`;
 
       const subtotal = Number(
         input.items.reduce((sum, item) => sum + item.lineTotal, 0).toFixed(2)
@@ -1054,90 +954,90 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
       const discountAmount = Number((input.discountAmount ?? 0).toFixed(2));
       const taxable = Math.max(0, subtotal - discountAmount);
       const taxAmount = Number(
-        ((taxable * (state.settings.taxRate || 0)) / 100).toFixed(2)
+        ((taxable * (settings.taxRate || 0)) / 100).toFixed(2)
       );
       const totalAmount = Number((taxable + taxAmount).toFixed(2));
       const amountPaid = Number((input.amountPaid ?? 0).toFixed(2));
 
-      const newOrder: Order = {
-        id: `ord-${Date.now()}`,
-        referenceNumber: ref,
-        quotationId: input.quotationId,
-        quotationRef: input.quotationRef,
-        customerId:
-          currentUser?.role === "customer" ? currentUser.id : undefined,
-        customerName: input.customerName,
-        customerEmail: input.customerEmail,
-        customerPhone: input.customerPhone,
-        orderSource: input.orderSource,
-        items: input.items,
-        subtotal,
-        taxAmount,
-        discountAmount,
-        totalAmount,
-        amountPaid,
-        paymentStatus: input.paymentStatus,
-        paymentMethod: input.paymentMethod,
-        productionStatus: "received",
-        deliveryMethod: input.deliveryMethod,
-        notes: input.notes,
-        takenByEmployeeId:
-          currentUser && currentUser.role !== "customer"
-            ? currentUser.id
-            : undefined,
-        takenByName:
-          currentUser && currentUser.role !== "customer"
-            ? currentUser.fullName
-            : undefined,
-        estimatedCompletion: input.estimatedCompletion,
-        createdAt: now,
-        updatedAt: now,
-      };
+      const validQuoteId =
+        input.quotationId && UUID_REGEX.test(input.quotationId)
+          ? input.quotationId
+          : null;
 
-      const supabase = getSupabaseBrowserClient();
-      if (supabase) {
-        const { data } = await supabase
-          .from("orders")
-          .insert({
-            reference_number: ref,
-            quotation_id: null,
-            customer_id: newOrder.customerId ?? null,
-            customer_name: newOrder.customerName,
-            customer_email: newOrder.customerEmail,
-            customer_phone: newOrder.customerPhone,
-            order_source: newOrder.orderSource,
-            items: newOrder.items,
-            subtotal,
-            tax_amount: taxAmount,
-            discount_amount: discountAmount,
-            total_amount: totalAmount,
-            amount_paid: amountPaid,
-            payment_status: newOrder.paymentStatus,
-            payment_method: newOrder.paymentMethod,
-            production_status: "received",
-            delivery_method: newOrder.deliveryMethod,
-            notes: newOrder.notes ?? null,
-            taken_by_name: newOrder.takenByName ?? null,
-            estimated_completion: newOrder.estimatedCompletion || null,
-          })
-          .select()
-          .maybeSingle();
-        if (data?.id) newOrder.id = String(data.id);
+      const { data, error } = await supabase
+        .from("orders")
+        .insert({
+          reference_number: ref,
+          quotation_id: validQuoteId,
+          customer_id:
+            currentUser?.role === "customer" ? currentUser.id : null,
+          customer_name: input.customerName,
+          customer_email: input.customerEmail,
+          customer_phone: input.customerPhone,
+          order_source: input.orderSource,
+          items: input.items,
+          subtotal,
+          tax_amount: taxAmount,
+          discount_amount: discountAmount,
+          total_amount: totalAmount,
+          amount_paid: amountPaid,
+          payment_status: input.paymentStatus,
+          payment_method: input.paymentMethod,
+          production_status: "received",
+          delivery_method: input.deliveryMethod,
+          notes: input.notes ?? null,
+          taken_by_employee_id:
+            currentUser && currentUser.role !== "customer"
+              ? currentUser.id
+              : null,
+          taken_by_name:
+            currentUser && currentUser.role !== "customer"
+              ? currentUser.fullName
+              : null,
+          estimated_completion: input.estimatedCompletion || null,
+        })
+        .select()
+        .single();
+
+      if (error || !data) {
+        throw new Error(error?.message || "Failed to create order.");
       }
 
-      commitState((prev) => ({
-        ...prev,
-        orders: [newOrder, ...prev.orders],
-      }));
-
-      return newOrder;
+      await refreshData();
+      return {
+        id: String(data.id),
+        referenceNumber: String(data.reference_number),
+        quotationId: data.quotation_id ? String(data.quotation_id) : undefined,
+        customerId: data.customer_id ? String(data.customer_id) : undefined,
+        customerName: String(data.customer_name),
+        customerEmail: String(data.customer_email),
+        customerPhone: String(data.customer_phone),
+        orderSource: data.order_source as Order["orderSource"],
+        items: (data.items as OrderItem[]) || [],
+        subtotal: Number(data.subtotal),
+        taxAmount: Number(data.tax_amount),
+        discountAmount: Number(data.discount_amount),
+        totalAmount: Number(data.total_amount),
+        amountPaid: Number(data.amount_paid),
+        paymentStatus: data.payment_status as PaymentStatus,
+        paymentMethod: String(data.payment_method),
+        productionStatus: data.production_status as ProductionStatus,
+        deliveryMethod: data.delivery_method as Order["deliveryMethod"],
+        notes: data.notes ? String(data.notes) : undefined,
+        takenByEmployeeId: data.taken_by_employee_id
+          ? String(data.taken_by_employee_id)
+          : undefined,
+        takenByName: data.taken_by_name
+          ? String(data.taken_by_name)
+          : undefined,
+        estimatedCompletion: data.estimated_completion
+          ? String(data.estimated_completion)
+          : undefined,
+        createdAt: String(data.created_at),
+        updatedAt: String(data.updated_at),
+      };
     },
-    [
-      commitState,
-      currentUser,
-      state.settings.orderPrefix,
-      state.settings.taxRate,
-    ]
+    [currentUser, refreshData, settings.orderPrefix, settings.taxRate]
   );
 
   const convertQuotationToOrder = useCallback(
@@ -1150,8 +1050,9 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
         deliveryMethod?: "pickup" | "courier";
       }
     ): Promise<Order | null> => {
-      const inq = state.inquiries.find((i) => i.id === inquiryId);
-      if (!inq) return null;
+      const supabase = getSupabaseBrowserClient();
+      const inq = inquiries.find((i) => i.id === inquiryId);
+      if (!supabase || !inq) return null;
 
       const unitPrice = inq.quotedUnitPrice ?? 0;
       const setupFee = inq.quotedSetupFee ?? 0;
@@ -1191,23 +1092,19 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
         estimatedCompletion: inq.targetDate,
       });
 
-      commitState((prev) => ({
-        ...prev,
-        inquiries: prev.inquiries.map((item) =>
-          item.id === inquiryId
-            ? {
-                ...item,
-                status: "converted_to_order",
-                convertedOrderRef: order.referenceNumber,
-                updatedAt: new Date().toISOString(),
-              }
-            : item
-        ),
-      }));
+      await supabase
+        .from("inquiries_quotations")
+        .update({
+          status: "converted_to_order",
+          converted_order_ref: order.referenceNumber,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", inquiryId);
 
+      await refreshData();
       return order;
     },
-    [commitState, createOrder, state.inquiries]
+    [createOrder, inquiries, refreshData]
   );
 
   const updateOrderStatus = useCallback(
@@ -1221,30 +1118,25 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
         notes?: string;
       }
     ) => {
-      const now = new Date().toISOString();
       const supabase = getSupabaseBrowserClient();
-      if (supabase) {
-        const dbPatch: Record<string, unknown> = { updated_at: now };
-        if (updates.productionStatus)
-          dbPatch.production_status = updates.productionStatus;
-        if (updates.paymentStatus)
-          dbPatch.payment_status = updates.paymentStatus;
-        if (updates.amountPaid !== undefined)
-          dbPatch.amount_paid = updates.amountPaid;
-        if (updates.estimatedCompletion !== undefined)
-          dbPatch.estimated_completion = updates.estimatedCompletion || null;
-        if (updates.notes !== undefined) dbPatch.notes = updates.notes;
-        await supabase.from("orders").update(dbPatch).eq("id", orderId);
-      }
+      if (!supabase) return;
 
-      commitState((prev) => ({
-        ...prev,
-        orders: prev.orders.map((ord) =>
-          ord.id === orderId ? { ...ord, ...updates, updatedAt: now } : ord
-        ),
-      }));
+      const dbPatch: Record<string, unknown> = {
+        updated_at: new Date().toISOString(),
+      };
+      if (updates.productionStatus)
+        dbPatch.production_status = updates.productionStatus;
+      if (updates.paymentStatus) dbPatch.payment_status = updates.paymentStatus;
+      if (updates.amountPaid !== undefined)
+        dbPatch.amount_paid = updates.amountPaid;
+      if (updates.estimatedCompletion !== undefined)
+        dbPatch.estimated_completion = updates.estimatedCompletion || null;
+      if (updates.notes !== undefined) dbPatch.notes = updates.notes;
+
+      await supabase.from("orders").update(dbPatch).eq("id", orderId);
+      await refreshData();
     },
-    [commitState]
+    [refreshData]
   );
 
   // REFERENCE FINDER
@@ -1253,44 +1145,42 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
       const clean = ref.trim().toUpperCase();
       if (!clean) return {};
       return {
-        order: state.orders.find(
-          (o) => o.referenceNumber.toUpperCase() === clean
-        ),
-        inquiry: state.inquiries.find(
+        order: orders.find((o) => o.referenceNumber.toUpperCase() === clean),
+        inquiry: inquiries.find(
           (i) => i.referenceNumber.toUpperCase() === clean
         ),
-        ticket: state.tickets.find(
-          (t) => t.ticketNumber.toUpperCase() === clean
-        ),
+        ticket: tickets.find((t) => t.ticketNumber.toUpperCase() === clean),
       };
     },
-    [state.inquiries, state.orders, state.tickets]
+    [inquiries, orders, tickets]
   );
 
   // LIVE CHAT & TICKETING QUEUE
   const openChatTicket = useCallback(
     async (input: OpenTicketInput): Promise<ChatTicket> => {
-      const ticketNumber = `${state.settings.ticketPrefix || "TKT"}-${makeRandomDigits(4)}`;
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) throw new Error("Database not connected");
+
+      const ticketNumber = `${settings.ticketPrefix || "TKT"}-${makeRandomDigits(4)}`;
       const now = new Date().toISOString();
 
-      // Auto-assign check if enabled in Super Admin Settings
       let status: TicketStatus = "queued";
       let assignedEmployeeId: string | undefined;
       let assignedEmployeeName: string | undefined;
       let claimedAt: string | undefined;
 
-      if (state.settings.autoAssignTickets) {
-        const onlineStaff = state.users.filter(
+      if (settings.autoAssignTickets) {
+        const onlineStaff = users.filter(
           (u) =>
             (u.role === "employee" || u.role === "super_admin") &&
             u.isActive &&
             u.isOnline
         );
         for (const emp of onlineStaff) {
-          const activeCount = state.tickets.filter(
+          const activeCount = tickets.filter(
             (t) => t.status === "active" && t.assignedEmployeeId === emp.id
           ).length;
-          if (activeCount < state.settings.maxActiveChatsPerEmployee) {
+          if (activeCount < settings.maxActiveChatsPerEmployee) {
             status = "active";
             assignedEmployeeId = emp.id;
             assignedEmployeeName = emp.fullName;
@@ -1300,37 +1190,59 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      const ticketId = `tkt-${Date.now()}`;
-      const sysMsg: ChatMessage = {
-        id: `msg-${Date.now()}-sys`,
-        ticketId,
-        senderRole: "system",
-        senderName: "Queue Bot",
-        message:
-          status === "active"
-            ? `Ticket ${ticketNumber} created and auto-assigned to ${assignedEmployeeName}.`
-            : `Ticket ${ticketNumber} joined the Live Support Queue.${
-                input.linkedReference
-                  ? ` Linked Reference: ${input.linkedReference}.`
-                  : ""
-              }`,
-        createdAt: now,
-      };
+      const { data: ticketRow, error } = await supabase
+        .from("chat_tickets")
+        .insert({
+          ticket_number: ticketNumber,
+          customer_id: currentUser ? currentUser.id : null,
+          customer_name: input.customerName,
+          customer_email: input.customerEmail,
+          topic: input.topic,
+          linked_reference: input.linkedReference?.trim() || null,
+          priority: input.priority ?? "normal",
+          status,
+          assigned_employee_id: assignedEmployeeId ?? null,
+          assigned_employee_name: assignedEmployeeName ?? null,
+          claimed_at: claimedAt ?? null,
+        })
+        .select()
+        .single();
 
-      const custMsg: ChatMessage = {
-        id: `msg-${Date.now()}-cust`,
-        ticketId,
-        senderRole: "customer",
-        senderName: input.customerName,
-        message: input.initialMessage,
-        createdAt: now,
-      };
+      if (error || !ticketRow) {
+        throw new Error(error?.message || "Failed to open chat ticket.");
+      }
 
-      const newTicket: ChatTicket = {
-        id: ticketId,
+      const sysMessageText =
+        status === "active"
+          ? `Ticket ${ticketNumber} created and assigned to ${assignedEmployeeName}.`
+          : `Ticket ${ticketNumber} joined the Live Support Queue.${
+              input.linkedReference
+                ? ` Linked Reference: ${input.linkedReference}.`
+                : ""
+            }`;
+
+      await supabase.from("chat_messages").insert([
+        {
+          ticket_id: ticketRow.id,
+          sender_role: "system",
+          sender_name: "Queue Bot",
+          message: sysMessageText,
+        },
+        {
+          ticket_id: ticketRow.id,
+          sender_role: "customer",
+          sender_name: input.customerName,
+          message: input.initialMessage,
+        },
+      ]);
+
+      await refreshData();
+      return {
+        id: String(ticketRow.id),
         ticketNumber,
-        customerId:
-          currentUser?.role === "customer" ? currentUser.id : undefined,
+        customerId: ticketRow.customer_id
+          ? String(ticketRow.customer_id)
+          : undefined,
         customerName: input.customerName,
         customerEmail: input.customerEmail,
         topic: input.topic,
@@ -1339,72 +1251,29 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
         status,
         assignedEmployeeId,
         assignedEmployeeName,
-        queuedAt: now,
+        queuedAt: String(ticketRow.queued_at),
         claimedAt,
-        messages: [sysMsg, custMsg],
+        messages: [],
       };
-
-      const supabase = getSupabaseBrowserClient();
-      if (supabase) {
-        const { data } = await supabase
-          .from("chat_tickets")
-          .insert({
-            ticket_number: ticketNumber,
-            customer_id: newTicket.customerId ?? null,
-            customer_name: newTicket.customerName,
-            customer_email: newTicket.customerEmail,
-            topic: newTicket.topic,
-            linked_reference: newTicket.linkedReference ?? null,
-            priority: newTicket.priority,
-            status: newTicket.status,
-            assigned_employee_name: newTicket.assignedEmployeeName ?? null,
-          })
-          .select()
-          .maybeSingle();
-        if (data?.id) {
-          newTicket.id = String(data.id);
-          await supabase.from("chat_messages").insert([
-            {
-              ticket_id: data.id,
-              sender_role: "system",
-              sender_name: "Queue Bot",
-              message: sysMsg.message,
-            },
-            {
-              ticket_id: data.id,
-              sender_role: "customer",
-              sender_name: custMsg.senderName,
-              message: custMsg.message,
-            },
-          ]);
-        }
-      }
-
-      commitState((prev) => ({
-        ...prev,
-        tickets: [...prev.tickets, newTicket],
-      }));
-      return newTicket;
     },
     [
-      commitState,
       currentUser,
-      state.settings.autoAssignTickets,
-      state.settings.maxActiveChatsPerEmployee,
-      state.settings.ticketPrefix,
-      state.tickets,
-      state.users,
+      refreshData,
+      settings.autoAssignTickets,
+      settings.maxActiveChatsPerEmployee,
+      settings.ticketPrefix,
+      tickets,
+      users,
     ]
   );
 
-  // Priority-aware FIFO queue ordering
   const sortedQueuedTickets = useMemo(() => {
     const rank: Record<TicketPriority, number> = {
       urgent: 0,
       high: 1,
       normal: 2,
     };
-    return state.tickets
+    return tickets
       .filter((t) => t.status === "queued")
       .sort((a, b) => {
         if (rank[a.priority] !== rank[b.priority]) {
@@ -1412,7 +1281,7 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
         }
         return new Date(a.queuedAt).getTime() - new Date(b.queuedAt).getTime();
       });
-  }, [state.tickets]);
+  }, [tickets]);
 
   const getQueuePosition = useCallback(
     (ticketId: string) => {
@@ -1424,54 +1293,32 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
 
   const claimTicket = useCallback(
     async (ticketId: string) => {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) return;
+
       const staffName = currentUser?.fullName || "Print Specialist";
-      const staffId = currentUser?.id || "usr-emp-1";
       const now = new Date().toISOString();
 
-      const claimSysMsg: ChatMessage = {
-        id: `msg-${Date.now()}-claim`,
-        ticketId,
-        senderRole: "system",
-        senderName: "Queue Bot",
+      await supabase
+        .from("chat_tickets")
+        .update({
+          status: "active",
+          assigned_employee_id: currentUser?.id ?? null,
+          assigned_employee_name: staffName,
+          claimed_at: now,
+        })
+        .eq("id", ticketId);
+
+      await supabase.from("chat_messages").insert({
+        ticket_id: ticketId,
+        sender_role: "system",
+        sender_name: "Queue Bot",
         message: `${staffName} accepted your ticket and joined the chat.`,
-        createdAt: now,
-      };
+      });
 
-      const supabase = getSupabaseBrowserClient();
-      if (supabase) {
-        await supabase
-          .from("chat_tickets")
-          .update({
-            status: "active",
-            assigned_employee_name: staffName,
-            claimed_at: now,
-          })
-          .eq("id", ticketId);
-        await supabase.from("chat_messages").insert({
-          ticket_id: ticketId,
-          sender_role: "system",
-          sender_name: "Queue Bot",
-          message: claimSysMsg.message,
-        });
-      }
-
-      commitState((prev) => ({
-        ...prev,
-        tickets: prev.tickets.map((t) =>
-          t.id === ticketId
-            ? {
-                ...t,
-                status: "active",
-                assignedEmployeeId: staffId,
-                assignedEmployeeName: staffName,
-                claimedAt: now,
-                messages: [...t.messages, claimSysMsg],
-              }
-            : t
-        ),
-      }));
+      await refreshData();
     },
-    [commitState, currentUser]
+    [currentUser, refreshData]
   );
 
   const claimNextQueuedTicket =
@@ -1489,48 +1336,32 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
       senderRole?: "customer" | "employee" | "system",
       senderNameOverride?: string
     ) => {
+      const supabase = getSupabaseBrowserClient();
       const clean = message.trim();
-      if (!clean) return;
+      if (!supabase || !clean) return;
 
       const role: ChatMessage["senderRole"] =
         senderRole ??
         (currentUser && currentUser.role !== "customer"
           ? "employee"
           : "customer");
-      const targetTicket = state.tickets.find((t) => t.id === ticketId);
+      const targetTicket = tickets.find((t) => t.id === ticketId);
       const senderName =
         senderNameOverride ||
         (role === "employee"
           ? currentUser?.fullName || "Print Specialist"
           : currentUser?.fullName || targetTicket?.customerName || "Customer");
 
-      const newMsg: ChatMessage = {
-        id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        ticketId,
-        senderRole: role,
-        senderName,
+      await supabase.from("chat_messages").insert({
+        ticket_id: ticketId,
+        sender_role: role,
+        sender_name: senderName,
         message: clean,
-        createdAt: new Date().toISOString(),
-      };
+      });
 
-      const supabase = getSupabaseBrowserClient();
-      if (supabase) {
-        await supabase.from("chat_messages").insert({
-          ticket_id: ticketId,
-          sender_role: role,
-          sender_name: senderName,
-          message: clean,
-        });
-      }
-
-      commitState((prev) => ({
-        ...prev,
-        tickets: prev.tickets.map((t) =>
-          t.id === ticketId ? { ...t, messages: [...t.messages, newMsg] } : t
-        ),
-      }));
+      await refreshData();
     },
-    [commitState, currentUser, state.tickets]
+    [currentUser, refreshData, tickets]
   );
 
   const updateTicketStatus = useCallback(
@@ -1544,263 +1375,321 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
         assignedEmployeeName?: string;
       }
     ) => {
-      const now = new Date().toISOString();
-      const resolvedPatch =
-        updates.status === "resolved" || updates.status === "closed"
-          ? { resolvedAt: now }
-          : {};
-
-      const statusMsg: ChatMessage | null =
-        updates.status === "resolved"
-          ? {
-              id: `msg-${Date.now()}-res`,
-              ticketId,
-              senderRole: "system",
-              senderName: "Queue Bot",
-              message: `Ticket marked as Resolved by ${currentUser?.fullName || "Staff"}.`,
-              createdAt: now,
-            }
-          : null;
-
       const supabase = getSupabaseBrowserClient();
-      if (supabase) {
-        const dbPatch: Record<string, unknown> = {};
-        if (updates.status) dbPatch.status = updates.status;
-        if (updates.priority) dbPatch.priority = updates.priority;
-        if (updates.internalNotes !== undefined)
-          dbPatch.internal_notes = updates.internalNotes;
-        if (updates.assignedEmployeeName !== undefined)
-          dbPatch.assigned_employee_name = updates.assignedEmployeeName;
-        if (resolvedPatch.resolvedAt)
-          dbPatch.resolved_at = resolvedPatch.resolvedAt;
-        await supabase.from("chat_tickets").update(dbPatch).eq("id", ticketId);
+      if (!supabase) return;
+
+      const now = new Date().toISOString();
+      const dbPatch: Record<string, unknown> = {};
+      if (updates.status) dbPatch.status = updates.status;
+      if (updates.priority) dbPatch.priority = updates.priority;
+      if (updates.internalNotes !== undefined)
+        dbPatch.internal_notes = updates.internalNotes;
+      if (updates.assignedEmployeeName !== undefined)
+        dbPatch.assigned_employee_name = updates.assignedEmployeeName;
+      if (updates.status === "resolved" || updates.status === "closed") {
+        dbPatch.resolved_at = now;
       }
 
-      commitState((prev) => ({
-        ...prev,
-        tickets: prev.tickets.map((t) =>
-          t.id === ticketId
-            ? {
-                ...t,
-                ...updates,
-                ...resolvedPatch,
-                messages: statusMsg ? [...t.messages, statusMsg] : t.messages,
-              }
-            : t
-        ),
-      }));
+      await supabase.from("chat_tickets").update(dbPatch).eq("id", ticketId);
+
+      if (updates.status === "resolved") {
+        await supabase.from("chat_messages").insert({
+          ticket_id: ticketId,
+          sender_role: "system",
+          sender_name: "Queue Bot",
+          message: `Ticket marked as Resolved by ${currentUser?.fullName || "Staff"}.`,
+        });
+      }
+
+      await refreshData();
     },
-    [commitState, currentUser]
+    [currentUser, refreshData]
   );
 
-  // SUPER ADMIN CONTROLS
+  // SUPER ADMIN DATABASE CONTROLS
   const updateSettings = useCallback(
     async (next: AppSettings) => {
       const supabase = getSupabaseBrowserClient();
-      if (supabase) {
-        await supabase
-          .from("app_settings")
-          .update({
-            shop_name: next.shopName,
-            tagline: next.tagline,
-            currency_code: next.currencyCode,
-            currency_symbol: next.currencySymbol,
-            tax_rate: next.taxRate,
-            quotation_validity_days: next.quotationValidityDays,
-            order_prefix: next.orderPrefix,
-            quote_prefix: next.quotePrefix,
-            ticket_prefix: next.ticketPrefix,
-            contact_email: next.contactEmail,
-            contact_phone: next.contactPhone,
-            shop_address: next.shopAddress,
-            business_hours: next.businessHours,
-            payment_instructions: next.paymentInstructions,
-            auto_assign_tickets: next.autoAssignTickets,
-            max_active_chats_per_employee: next.maxActiveChatsPerEmployee,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", 1);
-      }
+      if (!supabase) return { ok: false, error: "Database not connected." };
 
-      commitState((prev) => ({
-        ...prev,
-        settings: next,
-      }));
+      const { error } = await supabase
+        .from("app_settings")
+        .update({
+          shop_name: next.shopName,
+          tagline: next.tagline,
+          currency_code: next.currencyCode,
+          currency_symbol: next.currencySymbol,
+          tax_rate: next.taxRate,
+          quotation_validity_days: next.quotationValidityDays,
+          order_prefix: next.orderPrefix,
+          quote_prefix: next.quotePrefix,
+          ticket_prefix: next.ticketPrefix,
+          contact_email: next.contactEmail,
+          contact_phone: next.contactPhone,
+          shop_address: next.shopAddress,
+          business_hours: next.businessHours,
+          payment_instructions: next.paymentInstructions,
+          auto_assign_tickets: next.autoAssignTickets,
+          max_active_chats_per_employee: next.maxActiveChatsPerEmployee,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", 1);
+
+      if (error) return { ok: false, error: error.message };
+      setSettings(next);
+      await refreshData();
+      return { ok: true };
     },
-    [commitState]
+    [refreshData]
   );
 
   const upsertProduct = useCallback(
     async (product: Product) => {
       const supabase = getSupabaseBrowserClient();
-      let savedProduct = product;
+      if (!supabase) return { ok: false, error: "Database not connected." };
 
-      if (supabase) {
-        const isUuid =
-          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-            product.id
-          );
-        const payload: Record<string, unknown> = {
-          slug: product.slug,
-          name: product.name,
-          category: product.category,
-          short_description: product.shortDescription,
-          description: product.description,
-          base_unit: product.baseUnit,
-          min_order_qty: product.minOrderQty,
-          lead_time_days: product.leadTimeDays,
-          badge: product.badge ?? null,
-          featured: product.featured,
-          is_active: product.isActive,
-          accent_color: product.accentColor,
-          materials: product.materials,
-          finishes: product.finishes,
-          updated_at: new Date().toISOString(),
+      const isExistingUuid = UUID_REGEX.test(product.id);
+      let safeSlug =
+        product.slug.trim() ||
+        product.name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/(^-|-$)/g, "") ||
+        `product-${makeRandomDigits(4)}`;
+
+      const slugCollision = products.some(
+        (p) =>
+          p.id !== product.id &&
+          p.slug.toLowerCase() === safeSlug.toLowerCase()
+      );
+      if (slugCollision) {
+        safeSlug = `${safeSlug}-${makeRandomDigits(4)}`;
+      }
+
+      const payload = {
+        slug: safeSlug,
+        name: product.name,
+        category: product.category,
+        short_description: product.shortDescription,
+        description: product.description,
+        base_unit: product.baseUnit,
+        min_order_qty: product.minOrderQty,
+        lead_time_days: product.leadTimeDays,
+        badge: product.badge ?? null,
+        featured: product.featured,
+        is_active: product.isActive,
+        accent_color: product.accentColor,
+        materials: product.materials,
+        finishes: product.finishes,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data: savedRow, error: prodError } = isExistingUuid
+        ? await supabase
+            .from("products")
+            .update(payload)
+            .eq("id", product.id)
+            .select()
+            .single()
+        : await supabase.from("products").insert(payload).select().single();
+
+      if (prodError || !savedRow) {
+        return {
+          ok: false,
+          error: prodError?.message || "Failed to save product.",
         };
-        if (isUuid) payload.id = product.id;
+      }
 
-        const { data: upserted } = await supabase
-          .from("products")
-          .upsert(payload, { onConflict: "slug" })
-          .select()
-          .maybeSingle();
+      const prodId = String(savedRow.id);
+      await supabase.from("product_sizes").delete().eq("product_id", prodId);
 
-        if (upserted?.id) {
-          const prodId = String(upserted.id);
-          savedProduct = { ...product, id: prodId };
-          await supabase
-            .from("product_sizes")
-            .delete()
-            .eq("product_id", prodId);
-          if (product.sizes.length > 0) {
-            await supabase.from("product_sizes").insert(
-              product.sizes.map((sz, idx) => ({
-                product_id: prodId,
-                size_label: sz.sizeLabel,
-                dimensions: sz.dimensions,
-                unit_price: sz.unitPrice,
-                bulk_100_price: sz.bulk100Price ?? null,
-                bulk_500_price: sz.bulk500Price ?? null,
-                setup_fee: sz.setupFee || 0,
-                sort_order: idx + 1,
-              }))
-            );
-          }
+      let savedSizes = product.sizes;
+      if (product.sizes.length > 0) {
+        const { data: insertedSizes, error: sizesError } = await supabase
+          .from("product_sizes")
+          .insert(
+            product.sizes.map((sz, idx) => ({
+              product_id: prodId,
+              size_label: sz.sizeLabel,
+              dimensions: sz.dimensions,
+              unit_price: sz.unitPrice,
+              bulk_100_price: sz.bulk100Price ?? null,
+              bulk_500_price: sz.bulk500Price ?? null,
+              setup_fee: sz.setupFee || 0,
+              sort_order: idx + 1,
+            }))
+          )
+          .select();
+        if (sizesError) {
+          return { ok: false, error: sizesError.message };
+        }
+        if (insertedSizes) {
+          savedSizes = insertedSizes.map((sz: Record<string, unknown>) => ({
+            id: String(sz.id),
+            sizeLabel: String(sz.size_label),
+            dimensions: String(sz.dimensions),
+            unitPrice: Number(sz.unit_price),
+            bulk100Price:
+              sz.bulk_100_price != null ? Number(sz.bulk_100_price) : undefined,
+            bulk500Price:
+              sz.bulk_500_price != null ? Number(sz.bulk_500_price) : undefined,
+            setupFee: Number(sz.setup_fee || 0),
+          }));
         }
       }
 
-      commitState((prev) => {
-        const exists = prev.products.some(
-          (p) => p.id === product.id || p.id === savedProduct.id
-        );
-        return {
-          ...prev,
-          products: exists
-            ? prev.products.map((p) =>
-                p.id === product.id || p.id === savedProduct.id
-                  ? savedProduct
-                  : p
-              )
-            : [savedProduct, ...prev.products],
-        };
-      });
+      await refreshData();
+      const updated: Product = {
+        ...product,
+        id: prodId,
+        slug: safeSlug,
+        sizes: savedSizes,
+      };
+      return { ok: true, product: updated };
     },
-    [commitState]
+    [products, refreshData]
   );
 
   const deleteProduct = useCallback(
     async (productId: string) => {
       const supabase = getSupabaseBrowserClient();
-      if (supabase) {
-        await supabase.from("products").delete().eq("id", productId);
-      }
-      commitState((prev) => ({
-        ...prev,
-        products: prev.products.filter((p) => p.id !== productId),
-      }));
+      if (!supabase) return { ok: false, error: "Database not connected." };
+
+      const { error } = await supabase
+        .from("products")
+        .delete()
+        .eq("id", productId);
+      if (error) return { ok: false, error: error.message };
+
+      await refreshData();
+      return { ok: true };
     },
-    [commitState]
+    [refreshData]
+  );
+
+  const provisionStaffAccount = useCallback(
+    async (input: {
+      fullName: string;
+      email: string;
+      phone: string;
+      department: string;
+      role: UserRole;
+      password: string;
+    }) => {
+      const supabase = getSupabaseBrowserClient();
+      const pubKey = getSupabasePublicKey();
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      if (!supabase || !pubKey || !url) {
+        return { ok: false, error: "Database not connected." };
+      }
+
+      // Ephemeral client so signing up a new staff member doesn't replace Super Admin's session
+      const tempClient = createClient(url, pubKey, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+        },
+      });
+
+      const { data, error: signUpErr } = await tempClient.auth.signUp({
+        email: input.email.trim().toLowerCase(),
+        password: input.password,
+        options: {
+          data: {
+            full_name: input.fullName.trim(),
+            phone: input.phone.trim(),
+          },
+        },
+      });
+
+      if (signUpErr || !data.user) {
+        return {
+          ok: false,
+          error: signUpErr?.message || "Failed to create auth user.",
+        };
+      }
+
+      const { error: rpcErr } = await supabase.rpc("admin_assign_staff_role", {
+        target_user_id: data.user.id,
+        target_full_name: input.fullName.trim(),
+        target_phone: input.phone.trim(),
+        target_department: input.department.trim(),
+        target_role: input.role,
+      });
+
+      if (rpcErr) {
+        return { ok: false, error: rpcErr.message };
+      }
+
+      await refreshData();
+      return { ok: true };
+    },
+    [refreshData]
   );
 
   const upsertUser = useCallback(
     async (user: UserProfile) => {
       const supabase = getSupabaseBrowserClient();
-      if (supabase) {
-        await supabase
-          .from("profiles")
-          .update({
-            full_name: user.fullName,
-            phone: user.phone,
-            company_name: user.companyName ?? null,
-            role: user.role,
-            department: user.department ?? null,
-            is_active: user.isActive,
-            is_online: user.isOnline,
-          })
-          .eq("id", user.id);
-      }
-      commitState((prev) => {
-        const exists = prev.users.some((u) => u.id === user.id);
-        return {
-          ...prev,
-          users: exists
-            ? prev.users.map((u) => (u.id === user.id ? user : u))
-            : [...prev.users, user],
-        };
-      });
+      if (!supabase) return;
+
+      await supabase
+        .from("profiles")
+        .update({
+          full_name: user.fullName,
+          phone: user.phone,
+          company_name: user.companyName ?? null,
+          role: user.role,
+          department: user.department ?? null,
+          is_active: user.isActive,
+          is_online: user.isOnline,
+        })
+        .eq("id", user.id);
+
+      await refreshData();
     },
-    [commitState]
+    [refreshData]
   );
 
   const toggleEmployeeOnline = useCallback(
     async (userId: string) => {
-      const target = state.users.find((u) => u.id === userId);
-      const nextOnline = !(target?.isOnline ?? false);
       const supabase = getSupabaseBrowserClient();
-      if (supabase) {
-        await supabase
-          .from("profiles")
-          .update({ is_online: nextOnline })
-          .eq("id", userId);
-      }
-      commitState((prev) => ({
-        ...prev,
-        users: prev.users.map((u) =>
-          u.id === userId ? { ...u, isOnline: nextOnline } : u
-        ),
-      }));
-    },
-    [commitState, state.users]
-  );
+      if (!supabase) return;
 
-  const resetDemoData = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
-    setState({
-      settings: INITIAL_SETTINGS,
-      users: INITIAL_USERS,
-      products: INITIAL_PRODUCTS,
-      inquiries: INITIAL_INQUIRIES,
-      orders: INITIAL_ORDERS,
-      tickets: INITIAL_TICKETS,
-    });
-  }, []);
+      const target = users.find((u) => u.id === userId);
+      const nextOnline = !(target?.isOnline ?? false);
+
+      await supabase
+        .from("profiles")
+        .update({ is_online: nextOnline })
+        .eq("id", userId);
+
+      if (currentUser?.id === userId) {
+        setCurrentUser((prev) =>
+          prev ? { ...prev, isOnline: nextOnline } : null
+        );
+      }
+      await refreshData();
+    },
+    [currentUser?.id, refreshData, users]
+  );
 
   const value = useMemo<PrintShopContextValue>(
     () => ({
-      hydrated,
+      loading,
       supabaseConnected,
-      settings: state.settings,
-      users: state.users,
+      settings,
+      users,
       currentUser,
-      products: state.products,
-      inquiries: state.inquiries,
-      orders: state.orders,
-      tickets: state.tickets,
+      products,
+      inquiries,
+      orders,
+      tickets,
+      refreshData,
       formatCurrency,
       calculateProductPrice,
       login,
       registerCustomer,
-      quickSwitchUser,
       logout,
       submitInquiry,
       sendQuotation,
@@ -1818,20 +1707,25 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
       updateSettings,
       upsertProduct,
       deleteProduct,
+      provisionStaffAccount,
       upsertUser,
       toggleEmployeeOnline,
-      resetDemoData,
     }),
     [
-      hydrated,
+      loading,
       supabaseConnected,
-      state,
+      settings,
+      users,
       currentUser,
+      products,
+      inquiries,
+      orders,
+      tickets,
+      refreshData,
       formatCurrency,
       calculateProductPrice,
       login,
       registerCustomer,
-      quickSwitchUser,
       logout,
       submitInquiry,
       sendQuotation,
@@ -1849,9 +1743,9 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
       updateSettings,
       upsertProduct,
       deleteProduct,
+      provisionStaffAccount,
       upsertUser,
       toggleEmployeeOnline,
-      resetDemoData,
     ]
   );
 
@@ -1869,4 +1763,3 @@ export function usePrintShop() {
   }
   return ctx;
 }
-

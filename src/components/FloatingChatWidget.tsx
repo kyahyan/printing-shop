@@ -313,7 +313,7 @@ export function FloatingChatWidget() {
                 <input
                   value={linkedRef}
                   onChange={(e) => setLinkedRef(e.target.value)}
-                  placeholder="e.g., QT-2026-4821 or ORD-2026-9104"
+                  placeholder="e.g., QT-... or ORD-..."
                   className="w-full rounded-xl border border-separator bg-surface-secondary/60 px-3 py-2 font-mono text-foreground outline-none focus:border-accent"
                 />
               </div>

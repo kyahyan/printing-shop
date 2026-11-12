@@ -106,7 +106,27 @@ export default function ProductsPage() {
       </div>
 
       {/* Product Cards with Expanded Size Preview */}
-      {filtered.length === 0 ? (
+      {activeProducts.length === 0 ? (
+        <Card className="border border-dashed border-separator bg-surface p-12 text-center space-y-3">
+          <SlidersHorizontal className="mx-auto h-8 w-8 text-muted" />
+          <h3 className="text-lg font-bold text-foreground">
+            Catalog Is Ready for Your Products
+          </h3>
+          <p className="mx-auto max-w-md text-sm text-muted">
+            No products have been published to the database yet. Add products
+            and per-size pricing from the Super Admin Dashboard, or request a
+            custom print quotation directly.
+          </p>
+          <div className="flex flex-wrap justify-center gap-3">
+            <Link href="/quotations">
+              <Button variant="primary">Request Custom Quotation</Button>
+            </Link>
+            <Link href="/admin">
+              <Button variant="secondary">Open Super Admin</Button>
+            </Link>
+          </div>
+        </Card>
+      ) : filtered.length === 0 ? (
         <Card className="border border-separator bg-surface p-12 text-center space-y-3">
           <SlidersHorizontal className="mx-auto h-8 w-8 text-muted" />
           <h3 className="text-lg font-bold text-foreground">

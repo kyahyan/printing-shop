@@ -3,7 +3,7 @@
 import React, { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button, Card, Chip } from "@heroui/react";
-import { Briefcase, KeyRound, ShieldAlert, ShieldCheck } from "lucide-react";
+import { KeyRound, ShieldAlert } from "lucide-react";
 import { usePrintShop } from "@/context/PrintShopContext";
 
 function StaffLoginContent() {
@@ -12,12 +12,10 @@ function StaffLoginContent() {
   const nextPath = searchParams.get("next");
   const errorParam = searchParams.get("error");
 
-  const { login, supabaseConnected, settings } = usePrintShop();
+  const { login, settings } = usePrintShop();
 
-  const [email, setEmail] = useState(
-    supabaseConnected ? "" : "marco@clayjarprint.com"
-  );
-  const [password, setPassword] = useState(supabaseConnected ? "" : "staff123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(
     errorParam === "account_disabled"
       ? "Your staff account has been disabled by a Super Administrator."
@@ -55,20 +53,6 @@ function StaffLoginContent() {
     }
   };
 
-  const quickFillAndLogin = async (
-    demoEmail: string,
-    demoPass: string,
-    dest: string
-  ) => {
-    setEmail(demoEmail);
-    setPassword(demoPass);
-    const res = await login(demoEmail, demoPass, true);
-    if (res.ok) {
-      router.refresh();
-      router.push(dest);
-    }
-  };
-
   return (
     <div className="mx-auto max-w-xl px-4 py-14 space-y-6">
       <div className="text-center space-y-2">
@@ -79,8 +63,8 @@ function StaffLoginContent() {
           {settings.shopName} Staff Portal
         </h1>
         <p className="text-xs text-muted">
-          Authorized Supabase Auth portal for Print Shop Employees (Order Desk,
-          Quotations & Chat Queue) and Super Administrators.
+          Authorized portal for Print Shop Employees (Order Desk, Quotations &
+          Chat Queue) and Super Administrators.
         </p>
       </div>
 
@@ -111,7 +95,7 @@ function StaffLoginContent() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="staff@clayjarprint.com"
+              placeholder="admin@clayjar.com.ph"
               className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3.5 py-2.5 text-sm text-foreground outline-none focus:border-accent"
             />
           </div>
@@ -140,72 +124,6 @@ function StaffLoginContent() {
             {loading ? "Verifying Credentials..." : "Sign In to Staff Workspace"}
           </Button>
         </form>
-
-        {supabaseConnected ? (
-          <div className="rounded-xl border border-separator bg-surface-secondary/50 p-3.5 text-xs text-muted space-y-1">
-            <div className="font-semibold text-foreground">
-              First-Time Supabase Staff Setup:
-            </div>
-            <p>
-              1. Create an account via{" "}
-              <a href="/account" className="text-accent underline">
-                /account
-              </a>
-              , then promote your user in Supabase SQL Editor:
-            </p>
-            <code className="block rounded bg-surface p-2 font-mono text-[11px] text-foreground">
-              update public.profiles set role = &apos;super_admin&apos; where
-              email = &apos;your@email.com&apos;;
-            </code>
-          </div>
-        ) : (
-          <div className="space-y-3 border-t border-separator pt-4">
-            <div className="text-xs font-semibold text-muted">
-              Instant Preview Login:
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() =>
-                  quickFillAndLogin(
-                    "marco@clayjarprint.com",
-                    "staff123",
-                    "/dashboard"
-                  )
-                }
-                className="flex flex-col items-start gap-1 rounded-xl border border-separator bg-surface-secondary/60 p-3.5 text-left transition hover:border-accent"
-              >
-                <span className="flex items-center gap-1.5 text-xs font-bold text-foreground">
-                  <Briefcase className="h-4 w-4 text-accent" />
-                  Employee Dashboard
-                </span>
-                <span className="font-mono text-[11px] text-muted">
-                  marco@clayjarprint.com
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  quickFillAndLogin(
-                    "admin@clayjarprint.com",
-                    "admin123",
-                    "/admin"
-                  )
-                }
-                className="flex flex-col items-start gap-1 rounded-xl border border-separator bg-surface-secondary/60 p-3.5 text-left transition hover:border-accent"
-              >
-                <span className="flex items-center gap-1.5 text-xs font-bold text-foreground">
-                  <ShieldCheck className="h-4 w-4 text-amber-500" />
-                  Super Admin Dashboard
-                </span>
-                <span className="font-mono text-[11px] text-muted">
-                  admin@clayjarprint.com
-                </span>
-              </button>
-            </div>
-          </div>
-        )}
       </Card>
     </div>
   );

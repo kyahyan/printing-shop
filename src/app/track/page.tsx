@@ -38,8 +38,8 @@ function TrackContent() {
     settings,
   } = usePrintShop();
 
-  const [query, setQuery] = useState(initialRef || "QT-2026-4821");
-  const [searchedRef, setSearchedRef] = useState(initialRef || "QT-2026-4821");
+  const [query, setQuery] = useState(initialRef);
+  const [searchedRef, setSearchedRef] = useState(initialRef);
   const [convertedOrderRef, setConvertedOrderRef] = useState<string | null>(
     null
   );
@@ -90,14 +90,14 @@ function TrackContent() {
       </div>
 
       {/* Search Form */}
-      <Card className="border border-separator bg-surface p-4 space-y-3">
+      <Card className="border border-separator bg-surface p-4">
         <form onSubmit={handleSearch} className="flex flex-col gap-2 sm:flex-row">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Enter Reference Number (e.g., QT-2026-4821 or ORD-2026-9104)"
+              placeholder={`Enter Reference Number (e.g., ${settings.quotePrefix}-..., ${settings.orderPrefix}-..., or ${settings.ticketPrefix}-...)`}
               className="w-full rounded-xl border border-separator bg-surface-secondary/50 py-2.5 pl-10 pr-4 font-mono text-sm text-foreground outline-none focus:border-accent"
             />
           </div>
@@ -105,25 +105,6 @@ function TrackContent() {
             Lookup Reference
           </Button>
         </form>
-
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-          <span>Try sample references:</span>
-          {["QT-2026-4821", "QT-2026-4839", "ORD-2026-9104", "ORD-2026-9118", "TKT-1041"].map(
-            (sample) => (
-              <button
-                key={sample}
-                type="button"
-                onClick={() => {
-                  setQuery(sample);
-                  setSearchedRef(sample);
-                }}
-                className="rounded-md border border-separator bg-surface-secondary px-2 py-0.5 font-mono text-[11px] text-foreground hover:border-accent"
-              >
-                {sample}
-              </button>
-            )
-          )}
-        </div>
       </Card>
 
       {convertedOrderRef && (
@@ -487,6 +468,18 @@ function TrackContent() {
         </Card>
       )}
 
+      {!searchedRef && (
+        <Card className="border border-dashed border-separator bg-surface p-10 text-center space-y-2">
+          <Search className="mx-auto h-7 w-7 text-muted" />
+          <h3 className="text-base font-bold text-foreground">
+            Enter a Reference Number Above
+          </h3>
+          <p className="text-xs text-muted">
+            Paste your Quotation (<code className="font-mono">{settings.quotePrefix}-...</code>), Order (<code className="font-mono">{settings.orderPrefix}-...</code>), or Support Ticket (<code className="font-mono">{settings.ticketPrefix}-...</code>) Reference Number to check real-time progress.
+          </p>
+        </Card>
+      )}
+
       {searchedRef && !result.order && !result.inquiry && !result.ticket && (
         <Card className="border border-separator bg-surface p-10 text-center space-y-2">
           <h3 className="text-lg font-bold text-foreground">
@@ -494,8 +487,7 @@ function TrackContent() {
           </h3>
           <p className="text-xs text-muted">
             Double-check the prefix ({settings.quotePrefix}-,{" "}
-            {settings.orderPrefix}-, or {settings.ticketPrefix}-) or click one
-            of the sample reference pills above.
+            {settings.orderPrefix}-, or {settings.ticketPrefix}-) and try again.
           </p>
         </Card>
       )}

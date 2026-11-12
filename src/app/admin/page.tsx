@@ -4,12 +4,13 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button, Card, Chip, Tabs } from "@heroui/react";
 import {
+  AlertCircle,
   Briefcase,
   CheckCircle2,
   Database,
   Layers,
   Plus,
-  RotateCcw,
+  RefreshCw,
   Save,
   Settings,
   ShieldCheck,
@@ -24,7 +25,6 @@ import type {
   MaterialOption,
   Product,
   ProductSizeTier,
-  UserProfile,
   UserRole,
 } from "@/types/printshop";
 
@@ -36,40 +36,49 @@ const CURRENCY_PRESETS = [
   { code: "GBP", symbol: "£", label: "British Pound (£)" },
 ];
 
-function createBlankProduct(seed = "draft"): Product {
+const ACCENT_OPTIONS: { value: Product["accentColor"]; label: string }[] = [
+  { value: "indigo", label: "Indigo" },
+  { value: "cyan", label: "Cyan" },
+  { value: "magenta", label: "Magenta" },
+  { value: "amber", label: "Amber" },
+  { value: "emerald", label: "Emerald" },
+  { value: "rose", label: "Rose" },
+];
+
+function createBlankProduct(seed = "new"): Product {
   return {
-    id: `prod-${seed}`,
-    slug: `custom-product-${seed}`,
-    name: "New Print Product Line",
-    category: "Commercial Print",
-    shortDescription: "High-resolution custom print product priced per size.",
-    description:
-      "Full-color commercial printing with customizable sizes, paper weights, and protective lamination.",
+    id: `draft-${seed}`,
+    slug: "",
+    name: "",
+    category: "",
+    shortDescription: "",
+    description: "",
     baseUnit: "per pc",
     minOrderQty: 1,
     leadTimeDays: "2–3 business days",
-    badge: "New",
+    badge: "",
     featured: true,
     isActive: true,
     accentColor: "indigo",
     sizes: [
       {
         id: `sz-${seed}-1`,
-        sizeLabel: "Standard Small (A5)",
-        dimensions: "148 × 210 mm",
-        unitPrice: 12,
-        bulk100Price: 9.5,
-        bulk500Price: 7.5,
+        sizeLabel: "",
+        dimensions: "",
+        unitPrice: 0,
+        bulk100Price: undefined,
+        bulk500Price: undefined,
         setupFee: 0,
       },
     ],
-    materials: [{ name: "Standard 250 GSM Matte Stock", priceMultiplier: 1.0 }],
-    finishes: [{ name: "Clean Trim Finish", addPerUnit: 0 }],
+    materials: [{ name: "Standard Stock", priceMultiplier: 1.0 }],
+    finishes: [{ name: "Standard Finish", addPerUnit: 0 }],
   };
 }
 
 export default function SuperAdminPage() {
   const {
+    loading,
     currentUser,
     supabaseConnected,
     settings,
@@ -78,23 +87,38 @@ export default function SuperAdminPage() {
     orders,
     inquiries,
     tickets,
+    refreshData,
     formatCurrency,
     updateSettings,
     upsertProduct,
     deleteProduct,
+    provisionStaffAccount,
     upsertUser,
-    resetDemoData,
   } = usePrintShop();
 
   // --- PRODUCT EDITOR STATE ---
-  const [editingProduct, setEditingProduct] = useState<Product>(
-    products[0] ?? createBlankProduct()
+  const [editingProduct, setEditingProduct] = useState<Product>(() =>
+    createBlankProduct("init")
   );
+  const [hasInitializedProduct, setHasInitializedProduct] = useState(false);
+  const [savingProduct, setSavingProduct] = useState(false);
   const [productSavedMsg, setProductSavedMsg] = useState<string | null>(null);
+  const [productErrorMsg, setProductErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!loading && !hasInitializedProduct) {
+      if (products.length > 0) {
+        setEditingProduct(products[0]);
+      }
+      setHasInitializedProduct(true);
+    }
+  }, [loading, hasInitializedProduct, products]);
 
   // --- SETTINGS FORM STATE ---
   const [settingsForm, setSettingsForm] = useState<AppSettings>(settings);
+  const [savingSettings, setSavingSettings] = useState(false);
   const [settingsSavedMsg, setSettingsSavedMsg] = useState<string | null>(null);
+  const [settingsErrorMsg, setSettingsErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     setSettingsForm(settings);
@@ -106,7 +130,20 @@ export default function SuperAdminPage() {
   const [staffPhone, setStaffPhone] = useState("");
   const [staffDept, setStaffDept] = useState("Front Desk & Quotations");
   const [staffRole, setStaffRole] = useState<UserRole>("employee");
-  const [staffPass, setStaffPass] = useState("staff123");
+  const [staffPass, setStaffPass] = useState("");
+  const [creatingStaff, setCreatingStaff] = useState(false);
+  const [staffFeedback, setStaffFeedback] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-7xl px-4 py-20 text-center text-sm text-muted">
+        Loading Super Admin Command Center...
+      </div>
+    );
+  }
 
   if (currentUser?.role !== "super_admin") {
     return (
@@ -163,11 +200,11 @@ export default function SuperAdminPage() {
   const handleAddSizeTier = () => {
     const newTier: ProductSizeTier = {
       id: `sz-${Date.now()}`,
-      sizeLabel: "Custom Size Tier",
-      dimensions: "Specify W × H",
-      unitPrice: 100,
-      bulk100Price: 85,
-      bulk500Price: 70,
+      sizeLabel: "",
+      dimensions: "",
+      unitPrice: 0,
+      bulk100Price: undefined,
+      bulk500Price: undefined,
       setupFee: 0,
     };
     setEditingProduct((prev) => ({
@@ -196,6 +233,14 @@ export default function SuperAdminPage() {
     }));
   };
 
+  const handleRemoveMaterial = (idx: number) => {
+    if (editingProduct.materials.length <= 1) return;
+    setEditingProduct((prev) => ({
+      ...prev,
+      materials: prev.materials.filter((_, i) => i !== idx),
+    }));
+  };
+
   const handleFinishChange = (idx: number, patch: Partial<FinishOption>) => {
     setEditingProduct((prev) => ({
       ...prev,
@@ -205,51 +250,119 @@ export default function SuperAdminPage() {
     }));
   };
 
+  const handleRemoveFinish = (idx: number) => {
+    if (editingProduct.finishes.length <= 1) return;
+    setEditingProduct((prev) => ({
+      ...prev,
+      finishes: prev.finishes.filter((_, i) => i !== idx),
+    }));
+  };
+
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSavingProduct(true);
+    setProductErrorMsg(null);
+    setProductSavedMsg(null);
+
     const cleanSlug = editingProduct.name
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/(^-|-$)/g, "");
-    const updated = { ...editingProduct, slug: cleanSlug || editingProduct.slug };
-    await upsertProduct(updated);
-    setEditingProduct(updated);
+
+    const payload: Product = {
+      ...editingProduct,
+      slug: cleanSlug || editingProduct.slug,
+      description:
+        editingProduct.description.trim() ||
+        editingProduct.shortDescription.trim(),
+    };
+
+    const res = await upsertProduct(payload);
+    setSavingProduct(false);
+
+    if (!res.ok || !res.product) {
+      setProductErrorMsg(res.error || "Could not save product to database.");
+      return;
+    }
+
+    setEditingProduct(res.product);
     setProductSavedMsg(
-      `Saved "${updated.name}" with ${updated.sizes.length} size pricing tiers!`
+      `Saved "${res.product.name}" (${res.product.sizes.length} size tiers) directly to Supabase!`
     );
-    setTimeout(() => setProductSavedMsg(null), 3500);
+    setTimeout(() => setProductSavedMsg(null), 4000);
+  };
+
+  const handleDeleteCurrentProduct = async () => {
+    const targetId = editingProduct.id;
+    const remaining = products.filter((p) => p.id !== targetId);
+    const res = await deleteProduct(targetId);
+    if (!res.ok) {
+      setProductErrorMsg(res.error || "Could not delete product.");
+      return;
+    }
+    setEditingProduct(
+      remaining[0] ?? createBlankProduct(String(Date.now()))
+    );
+    setProductSavedMsg("Product deleted from database.");
+    setTimeout(() => setProductSavedMsg(null), 3000);
   };
 
   // Staff Handler
   const handleCreateStaff = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newStaff: UserProfile = {
-      id: `usr-staff-${Date.now()}`,
-      fullName: staffName.trim(),
-      email: staffEmail.trim().toLowerCase(),
-      phone: staffPhone.trim(),
-      role: staffRole,
+    setCreatingStaff(true);
+    setStaffFeedback(null);
+
+    const res = await provisionStaffAccount({
+      fullName: staffName,
+      email: staffEmail,
+      phone: staffPhone,
       department: staffDept,
-      isActive: true,
-      isOnline: true,
-      passwordHint: staffPass,
-      createdAt: new Date().toISOString(),
-    };
-    await upsertUser(newStaff);
+      role: staffRole,
+      password: staffPass,
+    });
+    setCreatingStaff(false);
+
+    if (!res.ok) {
+      setStaffFeedback({
+        type: "error",
+        message: res.error || "Failed to provision staff account.",
+      });
+      return;
+    }
+
+    setStaffFeedback({
+      type: "success",
+      message: `Created ${staffRole.replace("_", " ")} account for ${staffEmail}!`,
+    });
     setStaffName("");
     setStaffEmail("");
     setStaffPhone("");
+    setStaffPass("");
   };
 
   // Settings Handler
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    await updateSettings(settingsForm);
+    setSavingSettings(true);
+    setSettingsErrorMsg(null);
+    setSettingsSavedMsg(null);
+
+    const res = await updateSettings(settingsForm);
+    setSavingSettings(false);
+
+    if (!res.ok) {
+      setSettingsErrorMsg(res.error || "Failed to update settings.");
+      return;
+    }
+
     setSettingsSavedMsg(
-      "Application settings, currency, tax & shop details updated!"
+      "Application settings, currency, tax & shop details saved to Supabase!"
     );
-    setTimeout(() => setSettingsSavedMsg(null), 3500);
+    setTimeout(() => setSettingsSavedMsg(null), 4000);
   };
+
+  const isSavedProduct = products.some((p) => p.id === editingProduct.id);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 space-y-6">
@@ -262,7 +375,8 @@ export default function SuperAdminPage() {
             </Chip>
             <span className="text-xs text-muted">
               Administrator:{" "}
-              <strong className="text-foreground">{currentUser.fullName}</strong>
+              <strong className="text-foreground">{currentUser.fullName}</strong>{" "}
+              ({currentUser.email})
             </span>
           </div>
           <h1 className="mt-1 text-2xl font-extrabold text-foreground sm:text-3xl">
@@ -271,18 +385,22 @@ export default function SuperAdminPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            onPress={() => {
+              refreshData();
+            }}
+          >
+            <RefreshCw className="h-4 w-4" />
+            Sync Database
+          </Button>
           <Link href="/dashboard">
             <Button size="sm" variant="secondary">
               <Briefcase className="h-4 w-4" />
               Switch to Employee Desk
             </Button>
           </Link>
-          {!supabaseConnected && (
-            <Button size="sm" variant="ghost" onPress={resetDemoData}>
-              <RotateCcw className="h-4 w-4" />
-              Reset Seed Data
-            </Button>
-          )}
         </div>
       </div>
 
@@ -347,7 +465,7 @@ export default function SuperAdminPage() {
             </Tabs.Tab>
             <Tabs.Tab id="settings">
               <Settings className="mr-1.5 inline h-4 w-4" />
-              Application Settings & Supabase
+              Application Settings & Database
               <Tabs.Indicator />
             </Tabs.Tab>
           </Tabs.List>
@@ -363,6 +481,12 @@ export default function SuperAdminPage() {
               {productSavedMsg}
             </div>
           )}
+          {productErrorMsg && (
+            <div className="flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-xs font-semibold text-rose-500">
+              <AlertCircle className="h-4 w-4" />
+              {productErrorMsg}
+            </div>
+          )}
 
           <div className="grid gap-6 lg:grid-cols-12">
             {/* Product Selector Sidebar */}
@@ -370,50 +494,69 @@ export default function SuperAdminPage() {
               <Button
                 variant="primary"
                 fullWidth
-                onPress={() =>
-                  setEditingProduct(createBlankProduct(String(Date.now())))
-                }
+                onPress={() => {
+                  setProductErrorMsg(null);
+                  setProductSavedMsg(null);
+                  setEditingProduct(createBlankProduct(String(Date.now())));
+                }}
               >
                 <Plus className="h-4 w-4" />
                 Create New Print Product
               </Button>
 
-              <div className="space-y-2 max-h-[650px] overflow-y-auto pr-1">
-                {products.map((prod) => {
-                  const selected = editingProduct.id === prod.id;
-                  return (
-                    <Card
-                      key={prod.id}
-                      onClick={() => setEditingProduct(prod)}
-                      className={`cursor-pointer border p-4 transition ${
-                        selected
-                          ? "border-accent bg-accent/10"
-                          : "border-separator bg-surface hover:border-accent/40"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-semibold text-accent">
-                          {prod.category}
-                        </span>
-                        <Chip
-                          size="sm"
-                          color={prod.isActive ? "success" : "default"}
-                          variant="soft"
-                        >
-                          {prod.isActive ? "Active" : "Hidden"}
-                        </Chip>
-                      </div>
-                      <div className="mt-1 text-sm font-bold text-foreground">
-                        {prod.name}
-                      </div>
-                      <div className="mt-1 text-xs text-muted">
-                        {prod.sizes.length} sizes • Min {prod.minOrderQty}{" "}
-                        {prod.baseUnit}
-                      </div>
-                    </Card>
-                  );
-                })}
-              </div>
+              {products.length === 0 ? (
+                <Card className="border border-dashed border-separator bg-surface p-6 text-center space-y-2">
+                  <Layers className="mx-auto h-7 w-7 text-muted" />
+                  <div className="text-sm font-bold text-foreground">
+                    No Products in Database Yet
+                  </div>
+                  <p className="text-xs text-muted">
+                    Fill out the Product &amp; Price-Per-Size form on the right
+                    and click <strong>Save Product &amp; Prices</strong> to
+                    publish your first product to Supabase.
+                  </p>
+                </Card>
+              ) : (
+                <div className="space-y-2 max-h-[650px] overflow-y-auto pr-1">
+                  {products.map((prod) => {
+                    const selected = editingProduct.id === prod.id;
+                    return (
+                      <Card
+                        key={prod.id}
+                        onClick={() => {
+                          setProductErrorMsg(null);
+                          setEditingProduct(prod);
+                        }}
+                        className={`cursor-pointer border p-4 transition ${
+                          selected
+                            ? "border-accent bg-accent/10"
+                            : "border-separator bg-surface hover:border-accent/40"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-semibold text-accent">
+                            {prod.category}
+                          </span>
+                          <Chip
+                            size="sm"
+                            color={prod.isActive ? "success" : "default"}
+                            variant="soft"
+                          >
+                            {prod.isActive ? "Active" : "Hidden"}
+                          </Chip>
+                        </div>
+                        <div className="mt-1 text-sm font-bold text-foreground">
+                          {prod.name}
+                        </div>
+                        <div className="mt-1 text-xs text-muted">
+                          {prod.sizes.length} sizes • Min {prod.minOrderQty}{" "}
+                          {prod.baseUnit}
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Product & Price-Per-Size Matrix Editor */}
@@ -421,31 +564,39 @@ export default function SuperAdminPage() {
               <Card className="border border-separator bg-surface p-6">
                 <form onSubmit={handleSaveProduct} className="space-y-6">
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-separator pb-4">
-                    <h2 className="text-lg font-bold text-foreground">
-                      Configure Product & Per-Size Pricing
-                    </h2>
+                    <div>
+                      <h2 className="text-lg font-bold text-foreground">
+                        {isSavedProduct
+                          ? `Edit Product: ${editingProduct.name}`
+                          : "Create New Print Product"}
+                      </h2>
+                      <p className="text-xs text-muted">
+                        Saves directly to{" "}
+                        <code className="font-mono">public.products</code> and{" "}
+                        <code className="font-mono">public.product_sizes</code>
+                      </p>
+                    </div>
                     <div className="flex items-center gap-2">
-                      {products.some((p) => p.id === editingProduct.id) && (
+                      {isSavedProduct && (
                         <Button
                           size="sm"
                           variant="danger-soft"
-                          onPress={() => {
-                            const remaining = products.filter(
-                              (p) => p.id !== editingProduct.id
-                            );
-                            deleteProduct(editingProduct.id);
-                            setEditingProduct(
-                              remaining[0] ?? createBlankProduct()
-                            );
-                          }}
+                          onPress={handleDeleteCurrentProduct}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                           Delete Product
                         </Button>
                       )}
-                      <Button type="submit" size="sm" variant="primary">
+                      <Button
+                        type="submit"
+                        size="sm"
+                        variant="primary"
+                        isDisabled={savingProduct}
+                      >
                         <Save className="h-3.5 w-3.5" />
-                        Save Product & Prices
+                        {savingProduct
+                          ? "Saving..."
+                          : "Save Product & Prices"}
                       </Button>
                     </div>
                   </div>
@@ -465,6 +616,7 @@ export default function SuperAdminPage() {
                             name: e.target.value,
                           }))
                         }
+                        placeholder="e.g., Tarpaulin Printing / Business Cards"
                         className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm font-semibold text-foreground"
                       />
                     </div>
@@ -482,15 +634,17 @@ export default function SuperAdminPage() {
                             category: e.target.value,
                           }))
                         }
+                        placeholder="e.g., Large Format / Cards"
                         className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
                       />
                     </div>
 
                     <div>
                       <label className="mb-1 block text-xs font-semibold text-foreground">
-                        Pricing Unit Label
+                        Pricing Unit Label *
                       </label>
                       <input
+                        required
                         value={editingProduct.baseUnit}
                         onChange={(e) =>
                           setEditingProduct((prev) => ({
@@ -536,12 +690,13 @@ export default function SuperAdminPage() {
                             leadTimeDays: e.target.value,
                           }))
                         }
+                        placeholder="e.g., 2–3 business days"
                         className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
                       />
                     </div>
                   </div>
 
-                  <div className="grid gap-4 sm:grid-cols-3 items-center">
+                  <div className="grid gap-4 sm:grid-cols-4 items-center">
                     <div>
                       <label className="mb-1 block text-xs font-semibold text-foreground">
                         Highlight Badge (Optional)
@@ -554,9 +709,32 @@ export default function SuperAdminPage() {
                             badge: e.target.value || undefined,
                           }))
                         }
-                        placeholder="Best Seller / Waterproof"
+                        placeholder="Best Seller / Rush Ready"
                         className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-xs text-foreground"
                       />
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-foreground">
+                        Card Accent Theme
+                      </label>
+                      <select
+                        value={editingProduct.accentColor}
+                        onChange={(e) =>
+                          setEditingProduct((prev) => ({
+                            ...prev,
+                            accentColor: e.target
+                              .value as Product["accentColor"],
+                          }))
+                        }
+                        className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-xs text-foreground"
+                      >
+                        {ACCENT_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
                     <label className="flex items-center gap-2 text-xs font-semibold text-foreground pt-4">
@@ -590,20 +768,40 @@ export default function SuperAdminPage() {
                     </label>
                   </div>
 
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold text-foreground">
-                      Short Catalog Summary
-                    </label>
-                    <input
-                      value={editingProduct.shortDescription}
-                      onChange={(e) =>
-                        setEditingProduct((prev) => ({
-                          ...prev,
-                          shortDescription: e.target.value,
-                        }))
-                      }
-                      className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-xs text-foreground"
-                    />
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-foreground">
+                        Short Catalog Summary *
+                      </label>
+                      <input
+                        required
+                        value={editingProduct.shortDescription}
+                        onChange={(e) =>
+                          setEditingProduct((prev) => ({
+                            ...prev,
+                            shortDescription: e.target.value,
+                          }))
+                        }
+                        placeholder="Brief one-line summary shown on product cards"
+                        className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-xs text-foreground"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-foreground">
+                        Detailed Modal Description
+                      </label>
+                      <input
+                        value={editingProduct.description}
+                        onChange={(e) =>
+                          setEditingProduct((prev) => ({
+                            ...prev,
+                            description: e.target.value,
+                          }))
+                        }
+                        placeholder="Full specifications shown when customers click the product"
+                        className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-xs text-foreground"
+                      />
+                    </div>
                   </div>
 
                   {/* PRICE PER SIZE MATRIX EDITOR */}
@@ -614,8 +812,8 @@ export default function SuperAdminPage() {
                           Price-Per-Size Tiers ({settings.currencySymbol})
                         </h3>
                         <p className="text-[11px] text-muted">
-                          Set exact unit price, 100+ bulk price, 500+ wholesale
-                          price, and setup fee for each size.
+                          Set exact unit price, optional 100+ bulk price, 500+
+                          wholesale price, and setup fee for each size.
                         </p>
                       </div>
                       <Button
@@ -636,7 +834,7 @@ export default function SuperAdminPage() {
                         >
                           <div className="sm:col-span-3">
                             <label className="mb-0.5 block text-[10px] text-muted">
-                              Size Label
+                              Size Label *
                             </label>
                             <input
                               required
@@ -648,13 +846,14 @@ export default function SuperAdminPage() {
                                   e.target.value
                                 )
                               }
+                              placeholder="e.g., A4 / 2ft × 5ft"
                               className="w-full rounded-lg border border-separator bg-surface px-2.5 py-1.5 text-xs font-medium text-foreground"
                             />
                           </div>
 
                           <div className="sm:col-span-3">
                             <label className="mb-0.5 block text-[10px] text-muted">
-                              Dimensions
+                              Dimensions *
                             </label>
                             <input
                               required
@@ -666,13 +865,14 @@ export default function SuperAdminPage() {
                                   e.target.value
                                 )
                               }
+                              placeholder="e.g., 210 × 297 mm"
                               className="w-full rounded-lg border border-separator bg-surface px-2.5 py-1.5 text-xs text-foreground"
                             />
                           </div>
 
                           <div className="sm:col-span-2">
                             <label className="mb-0.5 block text-[10px] text-muted">
-                              Base Price
+                              Base Price *
                             </label>
                             <input
                               type="number"
@@ -776,7 +976,7 @@ export default function SuperAdminPage() {
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-foreground">
-                          Materials & Multipliers
+                          Materials & Multipliers (1.0 = Base)
                         </span>
                         <button
                           type="button"
@@ -785,7 +985,7 @@ export default function SuperAdminPage() {
                               ...prev,
                               materials: [
                                 ...prev.materials,
-                                { name: "New Stock", priceMultiplier: 1.15 },
+                                { name: "", priceMultiplier: 1.0 },
                               ],
                             }))
                           }
@@ -795,19 +995,22 @@ export default function SuperAdminPage() {
                         </button>
                       </div>
                       {editingProduct.materials.map((m, idx) => (
-                        <div key={idx} className="flex gap-2">
+                        <div key={idx} className="flex items-center gap-2">
                           <input
+                            required
                             value={m.name}
                             onChange={(e) =>
                               handleMaterialChange(idx, {
                                 name: e.target.value,
                               })
                             }
+                            placeholder="Material / Paper GSM"
                             className="flex-1 rounded-lg border border-separator bg-surface-secondary/50 px-2.5 py-1.5 text-xs text-foreground"
                           />
                           <input
                             type="number"
                             step="0.05"
+                            min={0.1}
                             value={m.priceMultiplier}
                             onChange={(e) =>
                               handleMaterialChange(idx, {
@@ -819,6 +1022,15 @@ export default function SuperAdminPage() {
                             className="w-20 rounded-lg border border-separator bg-surface-secondary/50 px-2 py-1.5 text-xs text-foreground"
                             title="Multiplier (1.0 = base)"
                           />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveMaterial(idx)}
+                            disabled={editingProduct.materials.length <= 1}
+                            className="rounded-lg p-1 text-rose-500 hover:bg-rose-500/10 disabled:opacity-30"
+                            aria-label="Remove material"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -826,7 +1038,7 @@ export default function SuperAdminPage() {
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-foreground">
-                          Finishes & Add-On Rates
+                          Finishes & Add-On Rates ({settings.currencySymbol})
                         </span>
                         <button
                           type="button"
@@ -835,7 +1047,7 @@ export default function SuperAdminPage() {
                               ...prev,
                               finishes: [
                                 ...prev.finishes,
-                                { name: "New Finish", addPerUnit: 10 },
+                                { name: "", addPerUnit: 0 },
                               ],
                             }))
                           }
@@ -845,17 +1057,20 @@ export default function SuperAdminPage() {
                         </button>
                       </div>
                       {editingProduct.finishes.map((f, idx) => (
-                        <div key={idx} className="flex gap-2">
+                        <div key={idx} className="flex items-center gap-2">
                           <input
+                            required
                             value={f.name}
                             onChange={(e) =>
                               handleFinishChange(idx, { name: e.target.value })
                             }
+                            placeholder="Finish / Lamination"
                             className="flex-1 rounded-lg border border-separator bg-surface-secondary/50 px-2.5 py-1.5 text-xs text-foreground"
                           />
                           <input
                             type="number"
                             step="0.25"
+                            min={0}
                             value={f.addPerUnit}
                             onChange={(e) =>
                               handleFinishChange(idx, {
@@ -867,6 +1082,15 @@ export default function SuperAdminPage() {
                             className="w-20 rounded-lg border border-separator bg-surface-secondary/50 px-2 py-1.5 text-xs text-foreground"
                             title="Add-on per unit"
                           />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveFinish(idx)}
+                            disabled={editingProduct.finishes.length <= 1}
+                            className="rounded-lg p-1 text-rose-500 hover:bg-rose-500/10 disabled:opacity-30"
+                            aria-label="Remove finish"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -882,9 +1106,33 @@ export default function SuperAdminPage() {
         ================================================================ */}
         <Tabs.Panel id="staff" className="grid gap-6 lg:grid-cols-12">
           <Card className="border border-separator bg-surface p-6 space-y-4 lg:col-span-5">
-            <h2 className="text-lg font-bold text-foreground">
-              Add Employee / Admin Account
-            </h2>
+            <div>
+              <h2 className="text-lg font-bold text-foreground">
+                Add Employee / Admin Account
+              </h2>
+              <p className="text-xs text-muted">
+                Creates a confirmed Supabase Auth user and assigns their staff
+                role immediately.
+              </p>
+            </div>
+
+            {staffFeedback && (
+              <div
+                className={`flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-xs font-medium ${
+                  staffFeedback.type === "success"
+                    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-500"
+                    : "border-rose-500/40 bg-rose-500/10 text-rose-500"
+                }`}
+              >
+                {staffFeedback.type === "success" ? (
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                ) : (
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                )}
+                <span>{staffFeedback.message}</span>
+              </div>
+            )}
+
             <form onSubmit={handleCreateStaff} className="space-y-3.5">
               <div>
                 <label className="mb-1 block text-xs font-semibold text-foreground">
@@ -894,7 +1142,7 @@ export default function SuperAdminPage() {
                   required
                   value={staffName}
                   onChange={(e) => setStaffName(e.target.value)}
-                  placeholder="Patricia Gomez"
+                  placeholder="Employee Full Name"
                   className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
                 />
               </div>
@@ -907,7 +1155,7 @@ export default function SuperAdminPage() {
                   type="email"
                   value={staffEmail}
                   onChange={(e) => setStaffEmail(e.target.value)}
-                  placeholder="patricia@clayjarprint.com"
+                  placeholder="employee@clayjar.com.ph"
                   className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
                 />
               </div>
@@ -950,18 +1198,29 @@ export default function SuperAdminPage() {
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-foreground">
-                    Initial Password
+                    Initial Password *
                   </label>
                   <input
+                    required
+                    type="password"
+                    minLength={6}
                     value={staffPass}
                     onChange={(e) => setStaffPass(e.target.value)}
+                    placeholder="Min. 6 characters"
                     className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
                   />
                 </div>
               </div>
-              <Button type="submit" variant="primary" fullWidth>
+              <Button
+                type="submit"
+                variant="primary"
+                fullWidth
+                isDisabled={creatingStaff}
+              >
                 <UserPlus className="h-4 w-4" />
-                Provision Staff Account
+                {creatingStaff
+                  ? "Provisioning Account..."
+                  : "Provision Staff Account"}
               </Button>
             </form>
           </Card>
@@ -1009,25 +1268,28 @@ export default function SuperAdminPage() {
                   <div className="flex items-center gap-2">
                     <select
                       value={u.role}
+                      disabled={u.id === currentUser.id}
                       onChange={(e) =>
                         upsertUser({ ...u, role: e.target.value as UserRole })
                       }
-                      className="rounded-lg border border-separator bg-surface-secondary px-2 py-1 text-foreground"
+                      className="rounded-lg border border-separator bg-surface-secondary px-2 py-1 text-foreground disabled:opacity-50"
                     >
                       <option value="customer">Customer</option>
                       <option value="employee">Employee</option>
                       <option value="super_admin">Super Admin</option>
                     </select>
 
-                    <Button
-                      size="sm"
-                      variant={u.isActive ? "secondary" : "primary"}
-                      onPress={() =>
-                        upsertUser({ ...u, isActive: !u.isActive })
-                      }
-                    >
-                      {u.isActive ? "Disable" : "Activate"}
-                    </Button>
+                    {u.id !== currentUser.id && (
+                      <Button
+                        size="sm"
+                        variant={u.isActive ? "secondary" : "primary"}
+                        onPress={() =>
+                          upsertUser({ ...u, isActive: !u.isActive })
+                        }
+                      >
+                        {u.isActive ? "Disable" : "Activate"}
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -1045,6 +1307,12 @@ export default function SuperAdminPage() {
               {settingsSavedMsg}
             </div>
           )}
+          {settingsErrorMsg && (
+            <div className="flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-xs font-semibold text-rose-500">
+              <AlertCircle className="h-4 w-4" />
+              {settingsErrorMsg}
+            </div>
+          )}
 
           <div className="grid gap-6 lg:grid-cols-12">
             <Card className="border border-separator bg-surface p-6 lg:col-span-8">
@@ -1059,9 +1327,13 @@ export default function SuperAdminPage() {
                       payment instructions, and chat queue limits.
                     </p>
                   </div>
-                  <Button type="submit" variant="primary">
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    isDisabled={savingSettings}
+                  >
                     <Save className="h-4 w-4" />
-                    Save All Settings
+                    {savingSettings ? "Saving..." : "Save All Settings"}
                   </Button>
                 </div>
 
@@ -1342,37 +1614,55 @@ export default function SuperAdminPage() {
               </form>
             </Card>
 
-            {/* Supabase Readiness Card */}
+            {/* Live Supabase Status Card */}
             <Card className="border border-separator bg-surface p-6 space-y-4 lg:col-span-4 h-fit">
               <div className="flex items-center gap-2 text-sm font-bold text-foreground">
                 <Database className="h-4 w-4 text-accent" />
-                Supabase Backend Integration
+                Live Database Status
               </div>
               <Chip
                 size="sm"
-                color={supabaseConnected ? "success" : "warning"}
+                color={supabaseConnected ? "success" : "danger"}
                 variant="soft"
               >
                 {supabaseConnected
-                  ? "Connected to Supabase Cloud"
-                  : "Awaiting .env.local Credentials"}
+                  ? "Connected to Supabase PostgreSQL"
+                  : "Supabase Not Configured"}
               </Chip>
-              <p className="text-xs leading-relaxed text-muted">
-                This project includes the full PostgreSQL schema, Row Level
-                Security (RLS) policies, and Realtime triggers in{" "}
-                <code className="rounded bg-surface-secondary px-1.5 py-0.5 font-mono text-foreground">
-                  supabase/schema.sql
-                </code>
-                .
-              </p>
-              <div className="rounded-xl bg-surface-secondary p-3.5 font-mono text-[11px] text-foreground space-y-1">
-                <div className="text-muted"># .env.local</div>
-                <div>NEXT_PUBLIC_SUPABASE_URL=...</div>
-                <div>NEXT_PUBLIC_SUPABASE_ANON_KEY=...</div>
+              <div className="divide-y divide-separator rounded-xl border border-separator bg-surface-secondary/40 px-3.5 text-xs">
+                <div className="flex justify-between py-2.5">
+                  <span className="text-muted">Products</span>
+                  <strong className="text-foreground">{products.length}</strong>
+                </div>
+                <div className="flex justify-between py-2.5">
+                  <span className="text-muted">Size Pricing Tiers</span>
+                  <strong className="text-foreground">
+                    {products.reduce((acc, p) => acc + p.sizes.length, 0)}
+                  </strong>
+                </div>
+                <div className="flex justify-between py-2.5">
+                  <span className="text-muted">Inquiries & Quotations</span>
+                  <strong className="text-foreground">
+                    {inquiries.length}
+                  </strong>
+                </div>
+                <div className="flex justify-between py-2.5">
+                  <span className="text-muted">Orders</span>
+                  <strong className="text-foreground">{orders.length}</strong>
+                </div>
+                <div className="flex justify-between py-2.5">
+                  <span className="text-muted">Support Tickets</span>
+                  <strong className="text-foreground">{tickets.length}</strong>
+                </div>
+                <div className="flex justify-between py-2.5">
+                  <span className="text-muted">Accounts</span>
+                  <strong className="text-foreground">{users.length}</strong>
+                </div>
               </div>
-              <p className="text-xs text-muted">
-                Send your Supabase Project URL and Anon Key anytime and we will
-                wire and seed your live database immediately.
+              <p className="text-xs leading-relaxed text-muted">
+                All products, size tiers, inquiries, orders, chat messages, and
+                settings are stored directly in Supabase PostgreSQL with Row
+                Level Security and Realtime sync.
               </p>
             </Card>
           </div>

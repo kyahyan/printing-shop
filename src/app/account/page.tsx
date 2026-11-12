@@ -26,7 +26,6 @@ function CustomerAccountContent() {
 
   const {
     currentUser,
-    supabaseConnected,
     orders,
     inquiries,
     tickets,
@@ -38,12 +37,8 @@ function CustomerAccountContent() {
   } = usePrintShop();
 
   const [authTab, setAuthTab] = useState<"signin" | "register">("signin");
-  const [email, setEmail] = useState(
-    supabaseConnected ? "" : "daniel@northstarcoffee.ph"
-  );
-  const [password, setPassword] = useState(
-    supabaseConnected ? "" : "customer123"
-  );
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [companyName, setCompanyName] = useState("");
@@ -229,14 +224,6 @@ function CustomerAccountContent() {
                 <UserCheck className="h-4 w-4" />
                 {submitting ? "Signing In..." : "Sign In to Account"}
               </Button>
-
-              {!supabaseConnected && (
-                <div className="rounded-xl border border-separator bg-surface-secondary/50 p-3 text-[11px] text-muted">
-                  <strong className="text-foreground">Demo Customer:</strong>{" "}
-                  <code className="font-mono">daniel@northstarcoffee.ph</code> /{" "}
-                  <code className="font-mono">customer123</code>
-                </div>
-              )}
             </form>
           ) : (
             <form onSubmit={handleRegister} className="space-y-3.5">

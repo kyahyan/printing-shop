@@ -31,19 +31,12 @@ export default function QuotationsPage() {
     [products]
   );
 
-  const [jobMode, setJobMode] = useState<"catalog" | "custom">("catalog");
-  const [selectedProductId, setSelectedProductId] = useState<string>(
-    activeProducts[0]?.id ?? ""
-  );
-  const [selectedSizeId, setSelectedSizeId] = useState<string>(
-    activeProducts[0]?.sizes[0]?.id ?? ""
-  );
-  const [material, setMaterial] = useState<string>(
-    activeProducts[0]?.materials[0]?.name ?? ""
-  );
-  const [finish, setFinish] = useState<string>(
-    activeProducts[0]?.finishes[0]?.name ?? ""
-  );
+  const [jobMode, setJobMode] = useState<"catalog" | "custom">("custom");
+  const [selectedProductId, setSelectedProductId] = useState<string>("");
+  const [selectedSizeId, setSelectedSizeId] = useState<string>("");
+  const [material, setMaterial] = useState<string>("");
+  const [finish, setFinish] = useState<string>("");
+  const [modeInitialized, setModeInitialized] = useState(false);
 
   // Custom job overrides
   const [customProductName, setCustomProductName] = useState("");
@@ -65,9 +58,20 @@ export default function QuotationsPage() {
   const [copied, setCopied] = useState(false);
 
   const selectedProduct = useMemo(
-    () => activeProducts.find((p) => p.id === selectedProductId) ?? null,
+    () =>
+      activeProducts.find((p) => p.id === selectedProductId) ??
+      activeProducts[0] ??
+      null,
     [activeProducts, selectedProductId]
   );
+
+  useEffect(() => {
+    if (activeProducts.length > 0 && !modeInitialized) {
+      setSelectedProductId(activeProducts[0].id);
+      setJobMode("catalog");
+      setModeInitialized(true);
+    }
+  }, [activeProducts, modeInitialized]);
 
   useEffect(() => {
     if (selectedProduct && jobMode === "catalog") {
@@ -250,14 +254,16 @@ export default function QuotationsPage() {
               <div className="flex flex-wrap gap-2 rounded-xl bg-surface-secondary p-1.5">
                 <button
                   type="button"
+                  disabled={activeProducts.length === 0}
                   onClick={() => setJobMode("catalog")}
-                  className={`flex-1 rounded-lg px-4 py-2 text-xs font-semibold transition ${
+                  className={`flex-1 rounded-lg px-4 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-45 ${
                     jobMode === "catalog"
                       ? "bg-surface text-foreground shadow-xs"
                       : "text-muted hover:text-foreground"
                   }`}
                 >
-                  Based on Catalog Product & Size
+                  Based on Catalog Product & Size{" "}
+                  {activeProducts.length === 0 ? "(No Products Yet)" : ""}
                 </button>
                 <button
                   type="button"

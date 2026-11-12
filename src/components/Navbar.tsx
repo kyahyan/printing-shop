@@ -6,7 +6,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { Button, Chip } from "@heroui/react";
 import {
   Briefcase,
-  Database,
   FileSpreadsheet,
   Layers,
   LogOut,
@@ -24,16 +23,7 @@ import { usePrintShop } from "@/context/PrintShopContext";
 export function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
-  const {
-    settings,
-    currentUser,
-    users,
-    tickets,
-    inquiries,
-    supabaseConnected,
-    quickSwitchUser,
-    logout,
-  } = usePrintShop();
+  const { settings, currentUser, tickets, inquiries, logout } = usePrintShop();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const queuedCount = tickets.filter((t) => t.status === "queued").length;
@@ -53,99 +43,9 @@ export function Navbar() {
     },
   ];
 
-  const handleQuickRole = (role: "guest" | "customer" | "employee" | "super_admin") => {
-    if (role === "guest") {
-      quickSwitchUser(null);
-      if (pathname.startsWith("/dashboard") || pathname.startsWith("/admin")) {
-        router.push("/");
-      }
-      return;
-    }
-    const target = users.find((u) => u.role === role && u.isActive);
-    if (target) {
-      quickSwitchUser(target.id);
-      if (role === "employee") router.push("/dashboard");
-      else if (role === "super_admin") router.push("/admin");
-      else if (role === "customer") router.push("/account");
-    }
-  };
-
   return (
     <header className="sticky top-0 z-40 border-b border-separator bg-background/85 backdrop-blur-xl">
       <div className="cmyk-bar h-1 w-full" />
-
-      {/* Preview Mode Role Bar (until Supabase credentials are added) */}
-      <div className="border-b border-separator bg-surface-secondary/70 px-4 py-1.5 text-xs">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-muted">
-            <Database className="h-3.5 w-3.5 text-accent" />
-            {supabaseConnected ? (
-              <span className="font-medium text-foreground">
-                Supabase Connected (Live Cloud DB & Realtime)
-              </span>
-            ) : (
-              <span>
-                <strong className="text-foreground">Supabase Ready</strong> —
-                Running interactive local store until{" "}
-                <code className="rounded bg-surface px-1 py-0.5 text-[11px]">
-                  .env.local
-                </code>{" "}
-                credentials are added.
-              </span>
-            )}
-          </div>
-
-          {!supabaseConnected && (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-muted">Quick Preview Role:</span>
-              <button
-                type="button"
-                onClick={() => handleQuickRole("guest")}
-                className={`rounded-md px-2 py-0.5 font-medium transition ${
-                  !currentUser
-                    ? "bg-accent text-accent-foreground"
-                    : "bg-surface text-muted hover:text-foreground"
-                }`}
-              >
-                Guest
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickRole("customer")}
-                className={`rounded-md px-2 py-0.5 font-medium transition ${
-                  currentUser?.role === "customer"
-                    ? "bg-accent text-accent-foreground"
-                    : "bg-surface text-muted hover:text-foreground"
-                }`}
-              >
-                Customer
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickRole("employee")}
-                className={`rounded-md px-2 py-0.5 font-medium transition ${
-                  currentUser?.role === "employee"
-                    ? "bg-accent text-accent-foreground"
-                    : "bg-surface text-muted hover:text-foreground"
-                }`}
-              >
-                Employee Desk
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickRole("super_admin")}
-                className={`rounded-md px-2 py-0.5 font-medium transition ${
-                  currentUser?.role === "super_admin"
-                    ? "bg-accent text-accent-foreground"
-                    : "bg-surface text-muted hover:text-foreground"
-                }`}
-              >
-                Super Admin
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
 
       {/* Main Navigation Row */}
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
@@ -244,9 +144,10 @@ export function Navbar() {
                 variant="ghost"
                 isIconOnly
                 aria-label="Sign out"
-                onPress={() => {
-                  logout();
+                onPress={async () => {
+                  await logout();
                   router.push("/");
+                  router.refresh();
                 }}
               >
                 <LogOut className="h-4 w-4" />
@@ -313,24 +214,64 @@ export function Navbar() {
               );
             })}
             <div className="my-2 border-t border-separator" />
-            <div className="flex flex-wrap gap-2">
-              <Link href="/account" onClick={() => setMobileOpen(false)}>
-                <Button size="sm" variant="secondary">
-                  <User className="h-4 w-4" />
-                  Customer Portal
+            {currentUser ? (
+              <div className="flex flex-wrap gap-2">
+                {(currentUser.role === "employee" ||
+                  currentUser.role === "super_admin") && (
+                  <Link href="/dashboard" onClick={() => setMobileOpen(false)}>
+                    <Button size="sm" variant="secondary">
+                      <Briefcase className="h-4 w-4" />
+                      Employee Desk
+                    </Button>
+                  </Link>
+                )}
+                {currentUser.role === "super_admin" && (
+                  <Link href="/admin" onClick={() => setMobileOpen(false)}>
+                    <Button size="sm" variant="primary">
+                      <ShieldCheck className="h-4 w-4" />
+                      Super Admin
+                    </Button>
+                  </Link>
+                )}
+                <Link href="/account" onClick={() => setMobileOpen(false)}>
+                  <Button size="sm" variant="secondary">
+                    <User className="h-4 w-4" />
+                    My Account
+                  </Button>
+                </Link>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onPress={async () => {
+                    setMobileOpen(false);
+                    await logout();
+                    router.push("/");
+                    router.refresh();
+                  }}
+                >
+                  <LogOut className="h-4 w-4" />
+                  Sign Out
                 </Button>
-              </Link>
-              <Link href="/staff/login" onClick={() => setMobileOpen(false)}>
-                <Button size="sm" variant="primary">
-                  <Briefcase className="h-4 w-4" />
-                  Staff / Admin Portal
-                </Button>
-              </Link>
-            </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                <Link href="/account" onClick={() => setMobileOpen(false)}>
+                  <Button size="sm" variant="secondary">
+                    <User className="h-4 w-4" />
+                    Customer Portal
+                  </Button>
+                </Link>
+                <Link href="/staff/login" onClick={() => setMobileOpen(false)}>
+                  <Button size="sm" variant="primary">
+                    <Briefcase className="h-4 w-4" />
+                    Staff / Admin Portal
+                  </Button>
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       )}
     </header>
   );
 }
-

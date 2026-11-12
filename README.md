@@ -27,9 +27,7 @@ A full-stack commercial printing shop platform built with **Next.js 16 (App Rout
    ```
 
 3. **Initialize Supabase Database:**
-   Run the SQL scripts inside your Supabase SQL Editor in order:
-   1. `supabase/schema.sql` — Tables, Auth trigger, hardened RLS policies, indexes, and Realtime publications.
-   2. `supabase/seed.sql` — Initial print shop catalog and price-per-size tiers.
+   Run `supabase/schema.sql` inside your Supabase SQL Editor to create all tables, Auth triggers, hardened Row Level Security (RLS) policies, indexes, and Realtime publications.
 
 4. **Run the development server:**
    ```bash
