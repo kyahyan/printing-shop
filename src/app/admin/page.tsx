@@ -5,18 +5,11 @@ import Link from "next/link";
 import { Button, Card, Chip, Tabs } from "@heroui/react";
 import {
   AlertCircle,
-  Briefcase,
   CheckCircle2,
-  Database,
-  Layers,
   Plus,
   RefreshCw,
   Save,
-  Settings,
-  ShieldCheck,
   Trash2,
-  UserPlus,
-  Users,
 } from "lucide-react";
 import { usePrintShop } from "@/context/PrintShopContext";
 import type {
@@ -34,15 +27,6 @@ const CURRENCY_PRESETS = [
   { code: "SGD", symbol: "S$", label: "Singapore Dollar (S$)" },
   { code: "EUR", symbol: "€", label: "Euro (€)" },
   { code: "GBP", symbol: "£", label: "British Pound (£)" },
-];
-
-const ACCENT_OPTIONS: { value: Product["accentColor"]; label: string }[] = [
-  { value: "indigo", label: "Indigo" },
-  { value: "cyan", label: "Cyan" },
-  { value: "magenta", label: "Magenta" },
-  { value: "amber", label: "Amber" },
-  { value: "emerald", label: "Emerald" },
-  { value: "rose", label: "Rose" },
 ];
 
 function createBlankProduct(seed = "new"): Product {
@@ -128,7 +112,7 @@ export default function SuperAdminPage() {
   const [staffName, setStaffName] = useState("");
   const [staffEmail, setStaffEmail] = useState("");
   const [staffPhone, setStaffPhone] = useState("");
-  const [staffDept, setStaffDept] = useState("Front Desk & Quotations");
+  const [staffDept, setStaffDept] = useState("Estimating & Pre-Press");
   const [staffRole, setStaffRole] = useState<UserRole>("employee");
   const [staffPass, setStaffPass] = useState("");
   const [creatingStaff, setCreatingStaff] = useState(false);
@@ -140,30 +124,29 @@ export default function SuperAdminPage() {
   if (loading) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-20 text-center text-sm text-muted">
-        Loading Super Admin Command Center...
+        Loading Administration Workspace...
       </div>
     );
   }
 
   if (currentUser?.role !== "super_admin") {
     return (
-      <div className="mx-auto max-w-lg px-4 py-20 text-center">
+      <div className="mx-auto max-w-md px-4 py-20 text-center">
         <Card className="border border-separator bg-surface p-8 space-y-4">
-          <ShieldCheck className="mx-auto h-12 w-12 text-amber-500" />
-          <h1 className="text-2xl font-extrabold text-foreground">
-            Super Admin Access Required
+          <h1 className="text-lg font-semibold text-foreground">
+            Administrator Authorization Required
           </h1>
-          <p className="text-sm text-muted">
-            Only Super Administrators can modify Application Settings, Products,
-            Price-Per-Size Matrices, and Staff Permissions.
+          <p className="text-xs leading-relaxed text-muted">
+            System settings, catalog pricing schedules, and staff permissions
+            are restricted to Super Administrators.
           </p>
-          <div className="flex justify-center gap-3">
+          <div className="flex justify-center gap-2.5">
             <Link href="/staff/login">
-              <Button variant="primary">Sign In as Super Admin</Button>
+              <Button variant="primary">Sign In</Button>
             </Link>
             {currentUser?.role === "employee" && (
               <Link href="/dashboard">
-                <Button variant="secondary">Return to Employee Desk</Button>
+                <Button variant="secondary">Operations Desk</Button>
               </Link>
             )}
           </div>
@@ -281,13 +264,13 @@ export default function SuperAdminPage() {
     setSavingProduct(false);
 
     if (!res.ok || !res.product) {
-      setProductErrorMsg(res.error || "Could not save product to database.");
+      setProductErrorMsg(res.error || "Unable to save product schedule.");
       return;
     }
 
     setEditingProduct(res.product);
     setProductSavedMsg(
-      `Saved "${res.product.name}" (${res.product.sizes.length} size tiers) directly to Supabase!`
+      `Saved "${res.product.name}" (${res.product.sizes.length} size schedules) to database.`
     );
     setTimeout(() => setProductSavedMsg(null), 4000);
   };
@@ -297,13 +280,11 @@ export default function SuperAdminPage() {
     const remaining = products.filter((p) => p.id !== targetId);
     const res = await deleteProduct(targetId);
     if (!res.ok) {
-      setProductErrorMsg(res.error || "Could not delete product.");
+      setProductErrorMsg(res.error || "Unable to delete product.");
       return;
     }
-    setEditingProduct(
-      remaining[0] ?? createBlankProduct(String(Date.now()))
-    );
-    setProductSavedMsg("Product deleted from database.");
+    setEditingProduct(remaining[0] ?? createBlankProduct(String(Date.now())));
+    setProductSavedMsg("Product removed from database.");
     setTimeout(() => setProductSavedMsg(null), 3000);
   };
 
@@ -333,7 +314,7 @@ export default function SuperAdminPage() {
 
     setStaffFeedback({
       type: "success",
-      message: `Created ${staffRole.replace("_", " ")} account for ${staffEmail}!`,
+      message: `Provisioned ${staffRole.replace("_", " ")} account for ${staffEmail}.`,
     });
     setStaffName("");
     setStaffEmail("");
@@ -356,31 +337,22 @@ export default function SuperAdminPage() {
       return;
     }
 
-    setSettingsSavedMsg(
-      "Application settings, currency, tax & shop details saved to Supabase!"
-    );
+    setSettingsSavedMsg("Global system settings saved to database.");
     setTimeout(() => setSettingsSavedMsg(null), 4000);
   };
 
   const isSavedProduct = products.some((p) => p.id === editingProduct.id);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 space-y-6">
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-separator pb-5">
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-separator pb-5">
         <div>
-          <div className="flex items-center gap-2">
-            <Chip size="sm" color="warning" variant="soft">
-              Super Admin Command Center
-            </Chip>
-            <span className="text-xs text-muted">
-              Administrator:{" "}
-              <strong className="text-foreground">{currentUser.fullName}</strong>{" "}
-              ({currentUser.email})
-            </span>
-          </div>
-          <h1 className="mt-1 text-2xl font-extrabold text-foreground sm:text-3xl">
-            Products, Price-Per-Size Matrix, Staff & App Settings
+          <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted">
+            System Administration · {currentUser.fullName} ({currentUser.email})
+          </p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
+            Catalog Pricing, Personnel & System Configuration
           </h1>
         </div>
 
@@ -389,83 +361,77 @@ export default function SuperAdminPage() {
             size="sm"
             variant="ghost"
             onPress={() => {
-              refreshData();
+              void refreshData();
             }}
           >
-            <RefreshCw className="h-4 w-4" />
-            Sync Database
+            <RefreshCw className="h-3.5 w-3.5" />
+            Sync
           </Button>
           <Link href="/dashboard">
             <Button size="sm" variant="secondary">
-              <Briefcase className="h-4 w-4" />
-              Switch to Employee Desk
+              Operations Desk
             </Button>
           </Link>
         </div>
       </div>
 
-      {/* Executive KPI Cards */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Card className="border border-separator bg-surface p-4">
+      {/* Executive KPI Ledger */}
+      <div className="grid grid-cols-2 divide-x divide-y divide-separator overflow-hidden rounded-xl border border-separator bg-surface lg:grid-cols-4 lg:divide-y-0 tabular-nums">
+        <div className="p-4">
           <div className="text-xs text-muted">Booked Order Value</div>
-          <div className="mt-1 text-2xl font-extrabold text-foreground">
+          <div className="mt-1 font-mono text-2xl font-semibold text-foreground">
             {formatCurrency(totalOrderRevenue)}
           </div>
-          <div className="text-[11px] text-emerald-500">
+          <div className="mt-0.5 font-mono text-[11px] text-muted">
             Collected: {formatCurrency(totalCollected)}
           </div>
-        </Card>
+        </div>
 
-        <Card className="border border-separator bg-surface p-4">
+        <div className="p-4">
           <div className="text-xs text-muted">Open Quoted Pipeline</div>
-          <div className="mt-1 text-2xl font-extrabold text-accent">
+          <div className="mt-1 font-mono text-2xl font-semibold text-foreground">
             {formatCurrency(quotedPipeline)}
           </div>
-          <div className="text-[11px] text-muted">
+          <div className="mt-0.5 text-[11px] text-muted">
             {inquiries.length} total inquiries
           </div>
-        </Card>
+        </div>
 
-        <Card className="border border-separator bg-surface p-4">
-          <div className="text-xs text-muted">Products & Size Tiers</div>
-          <div className="mt-1 text-2xl font-extrabold text-foreground">
-            {products.length} Products
+        <div className="p-4">
+          <div className="text-xs text-muted">Catalog Lines</div>
+          <div className="mt-1 text-2xl font-semibold text-foreground">
+            {products.length}
           </div>
-          <div className="text-[11px] text-muted">
-            {products.reduce((s, p) => s + p.sizes.length, 0)} configured size
-            prices
+          <div className="mt-0.5 text-[11px] text-muted">
+            {products.reduce((s, p) => s + p.sizes.length, 0)} size schedules
           </div>
-        </Card>
+        </div>
 
-        <Card className="border border-separator bg-surface p-4">
-          <div className="text-xs text-muted">Team & Queue Health</div>
-          <div className="mt-1 text-2xl font-extrabold text-foreground">
-            {users.filter((u) => u.role !== "customer").length} Staff
+        <div className="p-4">
+          <div className="text-xs text-muted">Personnel & Queue</div>
+          <div className="mt-1 text-2xl font-semibold text-foreground">
+            {users.filter((u) => u.role !== "customer").length} staff
           </div>
-          <div className="text-[11px] text-amber-500">
-            {tickets.filter((t) => t.status === "queued").length} queued chat
-            tickets
+          <div className="mt-0.5 text-[11px] text-muted">
+            {tickets.filter((t) => t.status === "queued").length} queued tickets
           </div>
-        </Card>
+        </div>
       </div>
 
-      {/* MAIN SUPER ADMIN TABS */}
+      {/* ADMINISTRATION TABS */}
       <Tabs defaultSelectedKey="products" className="space-y-5">
         <Tabs.ListContainer>
-          <Tabs.List aria-label="Super Admin sections">
+          <Tabs.List aria-label="System administration modules">
             <Tabs.Tab id="products">
-              <Layers className="mr-1.5 inline h-4 w-4" />
-              Products & Price-Per-Size ({products.length})
+              Catalog & Size Pricing ({products.length})
               <Tabs.Indicator />
             </Tabs.Tab>
             <Tabs.Tab id="staff">
-              <Users className="mr-1.5 inline h-4 w-4" />
-              Employees & Accounts ({users.length})
+              Personnel & Access ({users.length})
               <Tabs.Indicator />
             </Tabs.Tab>
             <Tabs.Tab id="settings">
-              <Settings className="mr-1.5 inline h-4 w-4" />
-              Application Settings & Database
+              Global Settings & Security
               <Tabs.Indicator />
             </Tabs.Tab>
           </Tabs.List>
@@ -476,15 +442,15 @@ export default function SuperAdminPage() {
         ================================================================ */}
         <Tabs.Panel id="products" className="space-y-4">
           {productSavedMsg && (
-            <div className="flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-xs font-semibold text-emerald-500">
-              <CheckCircle2 className="h-4 w-4" />
-              {productSavedMsg}
+            <div className="flex items-center gap-2 rounded-lg border border-separator bg-surface px-4 py-3 text-xs font-medium text-foreground">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              <span>{productSavedMsg}</span>
             </div>
           )}
           {productErrorMsg && (
-            <div className="flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-xs font-semibold text-rose-500">
-              <AlertCircle className="h-4 w-4" />
-              {productErrorMsg}
+            <div className="flex items-center gap-2 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-xs text-danger">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{productErrorMsg}</span>
             </div>
           )}
 
@@ -501,23 +467,23 @@ export default function SuperAdminPage() {
                 }}
               >
                 <Plus className="h-4 w-4" />
-                Create New Print Product
+                New Product Schedule
               </Button>
 
               {products.length === 0 ? (
-                <Card className="border border-dashed border-separator bg-surface p-6 text-center space-y-2">
-                  <Layers className="mx-auto h-7 w-7 text-muted" />
-                  <div className="text-sm font-bold text-foreground">
-                    No Products in Database Yet
+                <Card className="border border-separator bg-surface p-6 space-y-1.5">
+                  <div className="text-sm font-semibold text-foreground">
+                    No catalog lines published
                   </div>
-                  <p className="text-xs text-muted">
-                    Fill out the Product &amp; Price-Per-Size form on the right
-                    and click <strong>Save Product &amp; Prices</strong> to
-                    publish your first product to Supabase.
+                  <p className="text-xs leading-relaxed text-muted">
+                    Complete the specification and per-size pricing form on the
+                    right and click{" "}
+                    <strong className="text-foreground">Save Schedule</strong>{" "}
+                    to publish your first product line.
                   </p>
                 </Card>
               ) : (
-                <div className="space-y-2 max-h-[650px] overflow-y-auto pr-1">
+                <div className="max-h-[650px] space-y-2 overflow-y-auto pr-1">
                   {products.map((prod) => {
                     const selected = editingProduct.id === prod.id;
                     return (
@@ -527,14 +493,14 @@ export default function SuperAdminPage() {
                           setProductErrorMsg(null);
                           setEditingProduct(prod);
                         }}
-                        className={`cursor-pointer border p-4 transition ${
+                        className={`cursor-pointer border p-4 transition-colors tabular-nums ${
                           selected
-                            ? "border-accent bg-accent/10"
-                            : "border-separator bg-surface hover:border-accent/40"
+                            ? "border-foreground/40 bg-surface-secondary"
+                            : "border-separator bg-surface hover:bg-surface-secondary/50"
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-semibold text-accent">
+                          <span className="text-xs text-muted">
                             {prod.category}
                           </span>
                           <Chip
@@ -542,14 +508,14 @@ export default function SuperAdminPage() {
                             color={prod.isActive ? "success" : "default"}
                             variant="soft"
                           >
-                            {prod.isActive ? "Active" : "Hidden"}
+                            {prod.isActive ? "Published" : "Hidden"}
                           </Chip>
                         </div>
-                        <div className="mt-1 text-sm font-bold text-foreground">
+                        <div className="mt-1 text-sm font-semibold text-foreground">
                           {prod.name}
                         </div>
                         <div className="mt-1 text-xs text-muted">
-                          {prod.sizes.length} sizes • Min {prod.minOrderQty}{" "}
+                          {prod.sizes.length} sizes · Min {prod.minOrderQty}{" "}
                           {prod.baseUnit}
                         </div>
                       </Card>
@@ -565,15 +531,21 @@ export default function SuperAdminPage() {
                 <form onSubmit={handleSaveProduct} className="space-y-6">
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-separator pb-4">
                     <div>
-                      <h2 className="text-lg font-bold text-foreground">
+                      <h2 className="text-base font-semibold text-foreground">
                         {isSavedProduct
-                          ? `Edit Product: ${editingProduct.name}`
-                          : "Create New Print Product"}
+                          ? `Edit Schedule: ${editingProduct.name}`
+                          : "Create Product Schedule"}
                       </h2>
                       <p className="text-xs text-muted">
-                        Saves directly to{" "}
-                        <code className="font-mono">public.products</code> and{" "}
-                        <code className="font-mono">public.product_sizes</code>
+                        Persists directly to{" "}
+                        <code className="font-mono text-foreground">
+                          products
+                        </code>{" "}
+                        and{" "}
+                        <code className="font-mono text-foreground">
+                          product_sizes
+                        </code>{" "}
+                        with server-side order pricing enforcement.
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -584,7 +556,7 @@ export default function SuperAdminPage() {
                           onPress={handleDeleteCurrentProduct}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
-                          Delete Product
+                          Delete
                         </Button>
                       )}
                       <Button
@@ -594,9 +566,7 @@ export default function SuperAdminPage() {
                         isDisabled={savingProduct}
                       >
                         <Save className="h-3.5 w-3.5" />
-                        {savingProduct
-                          ? "Saving..."
-                          : "Save Product & Prices"}
+                        {savingProduct ? "Saving..." : "Save Schedule"}
                       </Button>
                     </div>
                   </div>
@@ -604,7 +574,7 @@ export default function SuperAdminPage() {
                   {/* Core Metadata */}
                   <div className="grid gap-4 sm:grid-cols-3">
                     <div className="sm:col-span-2">
-                      <label className="mb-1 block text-xs font-semibold text-foreground">
+                      <label className="mb-1 block text-xs font-medium text-foreground">
                         Product Name *
                       </label>
                       <input
@@ -616,13 +586,13 @@ export default function SuperAdminPage() {
                             name: e.target.value,
                           }))
                         }
-                        placeholder="e.g., Tarpaulin Printing / Business Cards"
-                        className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm font-semibold text-foreground"
+                        placeholder="e.g., Commercial Flyers / Large Format Tarpaulin"
+                        className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm font-medium text-foreground outline-none focus:border-accent"
                       />
                     </div>
 
                     <div>
-                      <label className="mb-1 block text-xs font-semibold text-foreground">
+                      <label className="mb-1 block text-xs font-medium text-foreground">
                         Category *
                       </label>
                       <input
@@ -634,14 +604,14 @@ export default function SuperAdminPage() {
                             category: e.target.value,
                           }))
                         }
-                        placeholder="e.g., Large Format / Cards"
-                        className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
+                        placeholder="e.g., Commercial Print"
+                        className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
                       />
                     </div>
 
                     <div>
-                      <label className="mb-1 block text-xs font-semibold text-foreground">
-                        Pricing Unit Label *
+                      <label className="mb-1 block text-xs font-medium text-foreground">
+                        Pricing Unit *
                       </label>
                       <input
                         required
@@ -653,12 +623,12 @@ export default function SuperAdminPage() {
                           }))
                         }
                         placeholder="per pc / per box / per sq.ft"
-                        className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
+                        className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
                       />
                     </div>
 
                     <div>
-                      <label className="mb-1 block text-xs font-semibold text-foreground">
+                      <label className="mb-1 block text-xs font-medium text-foreground">
                         Minimum Order Qty
                       </label>
                       <input
@@ -674,13 +644,13 @@ export default function SuperAdminPage() {
                             ),
                           }))
                         }
-                        className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
+                        className="h-9 w-full rounded-lg border border-separator bg-background px-3 font-mono text-sm text-foreground outline-none focus:border-accent tabular-nums"
                       />
                     </div>
 
                     <div>
-                      <label className="mb-1 block text-xs font-semibold text-foreground">
-                        Turnaround Lead Time
+                      <label className="mb-1 block text-xs font-medium text-foreground">
+                        Standard Lead Time
                       </label>
                       <input
                         value={editingProduct.leadTimeDays}
@@ -690,16 +660,16 @@ export default function SuperAdminPage() {
                             leadTimeDays: e.target.value,
                           }))
                         }
-                        placeholder="e.g., 2–3 business days"
-                        className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
+                        placeholder="2–3 business days"
+                        className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
                       />
                     </div>
                   </div>
 
-                  <div className="grid gap-4 sm:grid-cols-4 items-center">
+                  <div className="grid items-center gap-4 sm:grid-cols-3">
                     <div>
-                      <label className="mb-1 block text-xs font-semibold text-foreground">
-                        Highlight Badge (Optional)
+                      <label className="mb-1 block text-xs font-medium text-foreground">
+                        Specification Tag (Optional)
                       </label>
                       <input
                         value={editingProduct.badge || ""}
@@ -709,35 +679,12 @@ export default function SuperAdminPage() {
                             badge: e.target.value || undefined,
                           }))
                         }
-                        placeholder="Best Seller / Rush Ready"
-                        className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-xs text-foreground"
+                        placeholder="Offset / Same-Day Eligible"
+                        className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-xs text-foreground outline-none focus:border-accent"
                       />
                     </div>
 
-                    <div>
-                      <label className="mb-1 block text-xs font-semibold text-foreground">
-                        Card Accent Theme
-                      </label>
-                      <select
-                        value={editingProduct.accentColor}
-                        onChange={(e) =>
-                          setEditingProduct((prev) => ({
-                            ...prev,
-                            accentColor: e.target
-                              .value as Product["accentColor"],
-                          }))
-                        }
-                        className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-xs text-foreground"
-                      >
-                        {ACCENT_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <label className="flex items-center gap-2 text-xs font-semibold text-foreground pt-4">
+                    <label className="flex items-center gap-2 pt-4 text-xs font-medium text-foreground">
                       <input
                         type="checkbox"
                         checked={editingProduct.isActive}
@@ -747,12 +694,12 @@ export default function SuperAdminPage() {
                             isActive: e.target.checked,
                           }))
                         }
-                        className="h-4 w-4 accent-blue-600"
+                        className="h-4 w-4 accent-current"
                       />
-                      Visible in Public Catalog
+                      Published in Public Catalog
                     </label>
 
-                    <label className="flex items-center gap-2 text-xs font-semibold text-foreground pt-4">
+                    <label className="flex items-center gap-2 pt-4 text-xs font-medium text-foreground">
                       <input
                         type="checkbox"
                         checked={editingProduct.featured}
@@ -762,16 +709,16 @@ export default function SuperAdminPage() {
                             featured: e.target.checked,
                           }))
                         }
-                        className="h-4 w-4 accent-blue-600"
+                        className="h-4 w-4 accent-current"
                       />
-                      Featured on Home Page
+                      Featured on Storefront
                     </label>
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
-                      <label className="mb-1 block text-xs font-semibold text-foreground">
-                        Short Catalog Summary *
+                      <label className="mb-1 block text-xs font-medium text-foreground">
+                        Catalog Summary *
                       </label>
                       <input
                         required
@@ -782,13 +729,13 @@ export default function SuperAdminPage() {
                             shortDescription: e.target.value,
                           }))
                         }
-                        placeholder="Brief one-line summary shown on product cards"
-                        className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-xs text-foreground"
+                        placeholder="Concise summary shown on directory cards"
+                        className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-xs text-foreground outline-none focus:border-accent"
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-semibold text-foreground">
-                        Detailed Modal Description
+                      <label className="mb-1 block text-xs font-medium text-foreground">
+                        Detailed Technical Description
                       </label>
                       <input
                         value={editingProduct.description}
@@ -798,8 +745,8 @@ export default function SuperAdminPage() {
                             description: e.target.value,
                           }))
                         }
-                        placeholder="Full specifications shown when customers click the product"
-                        className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-xs text-foreground"
+                        placeholder="Full specifications shown in configurator modal"
+                        className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-xs text-foreground outline-none focus:border-accent"
                       />
                     </div>
                   </div>
@@ -808,12 +755,12 @@ export default function SuperAdminPage() {
                   <div className="space-y-3 border-t border-separator pt-5">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="text-sm font-bold text-foreground">
-                          Price-Per-Size Tiers ({settings.currencySymbol})
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">
+                          Per-Size Rate Schedule ({settings.currencySymbol})
                         </h3>
-                        <p className="text-[11px] text-muted">
-                          Set exact unit price, optional 100+ bulk price, 500+
-                          wholesale price, and setup fee for each size.
+                        <p className="mt-0.5 text-[11px] text-muted">
+                          Define base unit rate, optional 100+ and 500+ volume
+                          rates, and plate/setup fee per size.
                         </p>
                       </div>
                       <Button
@@ -822,15 +769,15 @@ export default function SuperAdminPage() {
                         onPress={handleAddSizeTier}
                       >
                         <Plus className="h-3.5 w-3.5" />
-                        Add Size Tier
+                        Add Size
                       </Button>
                     </div>
 
-                    <div className="space-y-2.5">
+                    <div className="space-y-2 tabular-nums">
                       {editingProduct.sizes.map((sz) => (
                         <div
                           key={sz.id}
-                          className="grid gap-2 rounded-xl border border-separator bg-surface-secondary/40 p-3 sm:grid-cols-12 items-end"
+                          className="grid items-end gap-2 rounded-lg border border-separator bg-background p-3 sm:grid-cols-12"
                         >
                           <div className="sm:col-span-3">
                             <label className="mb-0.5 block text-[10px] text-muted">
@@ -846,8 +793,8 @@ export default function SuperAdminPage() {
                                   e.target.value
                                 )
                               }
-                              placeholder="e.g., A4 / 2ft × 5ft"
-                              className="w-full rounded-lg border border-separator bg-surface px-2.5 py-1.5 text-xs font-medium text-foreground"
+                              placeholder="A4 / 2ft × 5ft"
+                              className="h-8 w-full rounded-md border border-separator bg-surface px-2.5 text-xs font-medium text-foreground outline-none focus:border-accent"
                             />
                           </div>
 
@@ -865,14 +812,14 @@ export default function SuperAdminPage() {
                                   e.target.value
                                 )
                               }
-                              placeholder="e.g., 210 × 297 mm"
-                              className="w-full rounded-lg border border-separator bg-surface px-2.5 py-1.5 text-xs text-foreground"
+                              placeholder="210 × 297 mm"
+                              className="h-8 w-full rounded-md border border-separator bg-surface px-2.5 font-mono text-xs text-foreground outline-none focus:border-accent"
                             />
                           </div>
 
                           <div className="sm:col-span-2">
                             <label className="mb-0.5 block text-[10px] text-muted">
-                              Base Price *
+                              Base Rate *
                             </label>
                             <input
                               type="number"
@@ -887,7 +834,7 @@ export default function SuperAdminPage() {
                                   Number.parseFloat(e.target.value || "0")
                                 )
                               }
-                              className="w-full rounded-lg border border-separator bg-surface px-2 py-1.5 text-xs font-bold text-foreground"
+                              className="h-8 w-full rounded-md border border-separator bg-surface px-2 font-mono text-xs font-semibold text-foreground outline-none focus:border-accent"
                             />
                           </div>
 
@@ -909,7 +856,7 @@ export default function SuperAdminPage() {
                                     : undefined
                                 )
                               }
-                              className="w-full rounded-lg border border-separator bg-surface px-2 py-1.5 text-xs text-foreground"
+                              className="h-8 w-full rounded-md border border-separator bg-surface px-2 font-mono text-xs text-foreground outline-none focus:border-accent"
                             />
                           </div>
 
@@ -931,7 +878,7 @@ export default function SuperAdminPage() {
                                     : undefined
                                 )
                               }
-                              className="w-full rounded-lg border border-separator bg-surface px-2 py-1.5 text-xs text-foreground"
+                              className="h-8 w-full rounded-md border border-separator bg-surface px-2 font-mono text-xs text-foreground outline-none focus:border-accent"
                             />
                           </div>
 
@@ -951,19 +898,19 @@ export default function SuperAdminPage() {
                                   Number.parseFloat(e.target.value || "0")
                                 )
                               }
-                              className="w-full rounded-lg border border-separator bg-surface px-2 py-1.5 text-xs text-foreground"
+                              className="h-8 w-full rounded-md border border-separator bg-surface px-2 font-mono text-xs text-foreground outline-none focus:border-accent"
                             />
                           </div>
 
-                          <div className="sm:col-span-1 flex justify-end">
+                          <div className="flex justify-end sm:col-span-1">
                             <button
                               type="button"
                               onClick={() => handleRemoveSizeTier(sz.id)}
                               disabled={editingProduct.sizes.length <= 1}
-                              className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-500/10 disabled:opacity-30"
+                              className="rounded p-1.5 text-muted hover:text-danger disabled:opacity-30"
                               aria-label="Remove size tier"
                             >
-                              <Trash2 className="h-4 w-4" />
+                              <Trash2 className="h-3.5 w-3.5" />
                             </button>
                           </div>
                         </div>
@@ -975,8 +922,8 @@ export default function SuperAdminPage() {
                   <div className="grid gap-4 border-t border-separator pt-5 sm:grid-cols-2">
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-foreground">
-                          Materials & Multipliers (1.0 = Base)
+                        <span className="text-xs font-medium text-foreground">
+                          Substrates & Multipliers (1.0 = Base)
                         </span>
                         <button
                           type="button"
@@ -989,9 +936,9 @@ export default function SuperAdminPage() {
                               ],
                             }))
                           }
-                          className="text-xs font-semibold text-accent hover:underline"
+                          className="text-xs font-medium text-accent hover:underline"
                         >
-                          + Add Material
+                          + Add Substrate
                         </button>
                       </div>
                       {editingProduct.materials.map((m, idx) => (
@@ -1004,8 +951,8 @@ export default function SuperAdminPage() {
                                 name: e.target.value,
                               })
                             }
-                            placeholder="Material / Paper GSM"
-                            className="flex-1 rounded-lg border border-separator bg-surface-secondary/50 px-2.5 py-1.5 text-xs text-foreground"
+                            placeholder="Stock / Paper GSM"
+                            className="h-8 flex-1 rounded-md border border-separator bg-background px-2.5 text-xs text-foreground outline-none focus:border-accent"
                           />
                           <input
                             type="number"
@@ -1019,14 +966,14 @@ export default function SuperAdminPage() {
                                 ),
                               })
                             }
-                            className="w-20 rounded-lg border border-separator bg-surface-secondary/50 px-2 py-1.5 text-xs text-foreground"
+                            className="h-8 w-20 rounded-md border border-separator bg-background px-2 font-mono text-xs text-foreground outline-none focus:border-accent tabular-nums"
                             title="Multiplier (1.0 = base)"
                           />
                           <button
                             type="button"
                             onClick={() => handleRemoveMaterial(idx)}
                             disabled={editingProduct.materials.length <= 1}
-                            className="rounded-lg p-1 text-rose-500 hover:bg-rose-500/10 disabled:opacity-30"
+                            className="rounded p-1 text-muted hover:text-danger disabled:opacity-30"
                             aria-label="Remove material"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -1037,8 +984,8 @@ export default function SuperAdminPage() {
 
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-foreground">
-                          Finishes & Add-On Rates ({settings.currencySymbol})
+                        <span className="text-xs font-medium text-foreground">
+                          Finishes & Unit Add-Ons ({settings.currencySymbol})
                         </span>
                         <button
                           type="button"
@@ -1051,7 +998,7 @@ export default function SuperAdminPage() {
                               ],
                             }))
                           }
-                          className="text-xs font-semibold text-accent hover:underline"
+                          className="text-xs font-medium text-accent hover:underline"
                         >
                           + Add Finish
                         </button>
@@ -1064,8 +1011,8 @@ export default function SuperAdminPage() {
                             onChange={(e) =>
                               handleFinishChange(idx, { name: e.target.value })
                             }
-                            placeholder="Finish / Lamination"
-                            className="flex-1 rounded-lg border border-separator bg-surface-secondary/50 px-2.5 py-1.5 text-xs text-foreground"
+                            placeholder="Lamination / Finish"
+                            className="h-8 flex-1 rounded-md border border-separator bg-background px-2.5 text-xs text-foreground outline-none focus:border-accent"
                           />
                           <input
                             type="number"
@@ -1079,14 +1026,14 @@ export default function SuperAdminPage() {
                                 ),
                               })
                             }
-                            className="w-20 rounded-lg border border-separator bg-surface-secondary/50 px-2 py-1.5 text-xs text-foreground"
+                            className="h-8 w-20 rounded-md border border-separator bg-background px-2 font-mono text-xs text-foreground outline-none focus:border-accent tabular-nums"
                             title="Add-on per unit"
                           />
                           <button
                             type="button"
                             onClick={() => handleRemoveFinish(idx)}
                             disabled={editingProduct.finishes.length <= 1}
-                            className="rounded-lg p-1 text-rose-500 hover:bg-rose-500/10 disabled:opacity-30"
+                            className="rounded p-1 text-muted hover:text-danger disabled:opacity-30"
                             aria-label="Remove finish"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -1107,25 +1054,24 @@ export default function SuperAdminPage() {
         <Tabs.Panel id="staff" className="grid gap-6 lg:grid-cols-12">
           <Card className="border border-separator bg-surface p-6 space-y-4 lg:col-span-5">
             <div>
-              <h2 className="text-lg font-bold text-foreground">
-                Add Employee / Admin Account
+              <h2 className="text-base font-semibold text-foreground">
+                Provision Staff Account
               </h2>
-              <p className="text-xs text-muted">
-                Creates a confirmed Supabase Auth user and assigns their staff
-                role immediately.
+              <p className="mt-0.5 text-xs text-muted">
+                Registers a Supabase Auth account and assigns staff permissions.
               </p>
             </div>
 
             {staffFeedback && (
               <div
-                className={`flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-xs font-medium ${
+                className={`flex items-center gap-2 rounded-lg border px-3.5 py-2.5 text-xs ${
                   staffFeedback.type === "success"
-                    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-500"
-                    : "border-rose-500/40 bg-rose-500/10 text-rose-500"
+                    ? "border-separator bg-surface-secondary text-foreground"
+                    : "border-danger/30 bg-danger/10 text-danger"
                 }`}
               >
                 {staffFeedback.type === "success" ? (
-                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
                 ) : (
                   <AlertCircle className="h-4 w-4 shrink-0" />
                 )}
@@ -1135,19 +1081,19 @@ export default function SuperAdminPage() {
 
             <form onSubmit={handleCreateStaff} className="space-y-3.5">
               <div>
-                <label className="mb-1 block text-xs font-semibold text-foreground">
+                <label className="mb-1 block text-xs font-medium text-foreground">
                   Full Name *
                 </label>
                 <input
                   required
                   value={staffName}
                   onChange={(e) => setStaffName(e.target.value)}
-                  placeholder="Employee Full Name"
-                  className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
+                  placeholder="Full name"
+                  className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold text-foreground">
+                <label className="mb-1 block text-xs font-medium text-foreground">
                   Work Email *
                 </label>
                 <input
@@ -1155,30 +1101,30 @@ export default function SuperAdminPage() {
                   type="email"
                   value={staffEmail}
                   onChange={(e) => setStaffEmail(e.target.value)}
-                  placeholder="employee@clayjar.com.ph"
-                  className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
+                  placeholder="staff@clayjar.com.ph"
+                  className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-foreground">
-                    Phone
+                  <label className="mb-1 block text-xs font-medium text-foreground">
+                    Telephone
                   </label>
                   <input
                     value={staffPhone}
                     onChange={(e) => setStaffPhone(e.target.value)}
                     placeholder="+63 917..."
-                    className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
+                    className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-foreground">
-                    Role
+                  <label className="mb-1 block text-xs font-medium text-foreground">
+                    Access Role
                   </label>
                   <select
                     value={staffRole}
                     onChange={(e) => setStaffRole(e.target.value as UserRole)}
-                    className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
+                    className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
                   >
                     <option value="employee">Employee</option>
                     <option value="super_admin">Super Admin</option>
@@ -1187,27 +1133,27 @@ export default function SuperAdminPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-foreground">
+                  <label className="mb-1 block text-xs font-medium text-foreground">
                     Department
                   </label>
                   <input
                     value={staffDept}
                     onChange={(e) => setStaffDept(e.target.value)}
-                    className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
+                    className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-foreground">
+                  <label className="mb-1 block text-xs font-medium text-foreground">
                     Initial Password *
                   </label>
                   <input
                     required
                     type="password"
-                    minLength={6}
+                    minLength={8}
                     value={staffPass}
                     onChange={(e) => setStaffPass(e.target.value)}
-                    placeholder="Min. 6 characters"
-                    className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
+                    placeholder="Min. 8 characters"
+                    className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
                   />
                 </div>
               </div>
@@ -1217,17 +1163,14 @@ export default function SuperAdminPage() {
                 fullWidth
                 isDisabled={creatingStaff}
               >
-                <UserPlus className="h-4 w-4" />
-                {creatingStaff
-                  ? "Provisioning Account..."
-                  : "Provision Staff Account"}
+                {creatingStaff ? "Provisioning..." : "Provision Account"}
               </Button>
             </form>
           </Card>
 
           <Card className="border border-separator bg-surface p-6 space-y-4 lg:col-span-7">
-            <h2 className="text-lg font-bold text-foreground">
-              Directory of Staff & Customer Accounts ({users.length})
+            <h2 className="text-base font-semibold text-foreground tabular-nums">
+              Account Directory ({users.length})
             </h2>
             <div className="divide-y divide-separator">
               {users.map((u) => (
@@ -1237,7 +1180,7 @@ export default function SuperAdminPage() {
                 >
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-sm text-foreground">
+                      <span className="text-sm font-medium text-foreground">
                         {u.fullName}
                       </span>
                       <Chip
@@ -1246,8 +1189,8 @@ export default function SuperAdminPage() {
                           u.role === "super_admin"
                             ? "warning"
                             : u.role === "employee"
-                            ? "accent"
-                            : "default"
+                              ? "accent"
+                              : "default"
                         }
                         variant="soft"
                       >
@@ -1255,13 +1198,13 @@ export default function SuperAdminPage() {
                       </Chip>
                       {!u.isActive && (
                         <Chip size="sm" color="danger" variant="soft">
-                          Deactivated
+                          Disabled
                         </Chip>
                       )}
                     </div>
-                    <div className="text-muted">
+                    <div className="mt-0.5 text-muted">
                       {u.email}
-                      {u.department ? ` • ${u.department}` : ""}
+                      {u.department ? ` · ${u.department}` : ""}
                     </div>
                   </div>
 
@@ -1272,7 +1215,7 @@ export default function SuperAdminPage() {
                       onChange={(e) =>
                         upsertUser({ ...u, role: e.target.value as UserRole })
                       }
-                      className="rounded-lg border border-separator bg-surface-secondary px-2 py-1 text-foreground disabled:opacity-50"
+                      className="h-8 rounded-md border border-separator bg-background px-2 text-foreground outline-none disabled:opacity-50"
                     >
                       <option value="customer">Customer</option>
                       <option value="employee">Employee</option>
@@ -1287,7 +1230,7 @@ export default function SuperAdminPage() {
                           upsertUser({ ...u, isActive: !u.isActive })
                         }
                       >
-                        {u.isActive ? "Disable" : "Activate"}
+                        {u.isActive ? "Disable" : "Enable"}
                       </Button>
                     )}
                   </div>
@@ -1298,19 +1241,19 @@ export default function SuperAdminPage() {
         </Tabs.Panel>
 
         {/* ================================================================
-            TAB 3: APPLICATION SETTINGS & SUPABASE CONFIGURATION
+            TAB 3: APPLICATION SETTINGS & SECURITY STATUS
         ================================================================ */}
         <Tabs.Panel id="settings" className="space-y-6">
           {settingsSavedMsg && (
-            <div className="flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-xs font-semibold text-emerald-500">
-              <CheckCircle2 className="h-4 w-4" />
-              {settingsSavedMsg}
+            <div className="flex items-center gap-2 rounded-lg border border-separator bg-surface px-4 py-3 text-xs font-medium text-foreground">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              <span>{settingsSavedMsg}</span>
             </div>
           )}
           {settingsErrorMsg && (
-            <div className="flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-xs font-semibold text-rose-500">
-              <AlertCircle className="h-4 w-4" />
-              {settingsErrorMsg}
+            <div className="flex items-center gap-2 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-xs text-danger">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{settingsErrorMsg}</span>
             </div>
           )}
 
@@ -1319,28 +1262,29 @@ export default function SuperAdminPage() {
               <form onSubmit={handleSaveSettings} className="space-y-5">
                 <div className="flex items-center justify-between border-b border-separator pb-4">
                   <div>
-                    <h2 className="text-lg font-bold text-foreground">
-                      Global Print Shop & Quotation Settings
+                    <h2 className="text-base font-semibold text-foreground">
+                      Global Commercial & Studio Settings
                     </h2>
                     <p className="text-xs text-muted">
-                      Controls branding, currency, tax, reference prefixes,
-                      payment instructions, and chat queue limits.
+                      Controls studio identity, tax rate, reference prefixes,
+                      settlement instructions, and queue routing.
                     </p>
                   </div>
                   <Button
                     type="submit"
+                    size="sm"
                     variant="primary"
                     isDisabled={savingSettings}
                   >
-                    <Save className="h-4 w-4" />
-                    {savingSettings ? "Saving..." : "Save All Settings"}
+                    <Save className="h-3.5 w-3.5" />
+                    {savingSettings ? "Saving..." : "Save Settings"}
                   </Button>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-foreground">
-                      Print Shop Name
+                    <label className="mb-1 block text-xs font-medium text-foreground">
+                      Studio Name
                     </label>
                     <input
                       required
@@ -1351,13 +1295,13 @@ export default function SuperAdminPage() {
                           shopName: e.target.value,
                         }))
                       }
-                      className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
+                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
                     />
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-foreground">
-                      Storefront Tagline
+                    <label className="mb-1 block text-xs font-medium text-foreground">
+                      Tagline
                     </label>
                     <input
                       value={settingsForm.tagline}
@@ -1367,16 +1311,16 @@ export default function SuperAdminPage() {
                           tagline: e.target.value,
                         }))
                       }
-                      className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
+                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
                     />
                   </div>
                 </div>
 
                 {/* Currency, Tax, Validity */}
-                <div className="grid gap-4 sm:grid-cols-3">
+                <div className="grid gap-4 sm:grid-cols-3 tabular-nums">
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-foreground">
-                      Currency
+                    <label className="mb-1 block text-xs font-medium text-foreground">
+                      Settlement Currency
                     </label>
                     <select
                       value={settingsForm.currencyCode}
@@ -1392,7 +1336,7 @@ export default function SuperAdminPage() {
                           }));
                         }
                       }}
-                      className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
+                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
                     >
                       {CURRENCY_PRESETS.map((c) => (
                         <option key={c.code} value={c.code}>
@@ -1403,8 +1347,8 @@ export default function SuperAdminPage() {
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-foreground">
-                      Tax / VAT Rate (%)
+                    <label className="mb-1 block text-xs font-medium text-foreground">
+                      VAT / Tax Rate (%)
                     </label>
                     <input
                       type="number"
@@ -1417,12 +1361,12 @@ export default function SuperAdminPage() {
                           taxRate: Number.parseFloat(e.target.value || "0"),
                         }))
                       }
-                      className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
+                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 font-mono text-sm text-foreground outline-none focus:border-accent"
                     />
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-foreground">
+                    <label className="mb-1 block text-xs font-medium text-foreground">
                       Quotation Validity (Days)
                     </label>
                     <input
@@ -1438,7 +1382,7 @@ export default function SuperAdminPage() {
                           ),
                         }))
                       }
-                      className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
+                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 font-mono text-sm text-foreground outline-none focus:border-accent"
                     />
                   </div>
                 </div>
@@ -1446,8 +1390,8 @@ export default function SuperAdminPage() {
                 {/* Reference Number Prefixes */}
                 <div className="grid gap-4 sm:grid-cols-3">
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-foreground">
-                      Order Reference Prefix
+                    <label className="mb-1 block text-xs font-medium text-foreground">
+                      Order Prefix
                     </label>
                     <input
                       value={settingsForm.orderPrefix}
@@ -1457,12 +1401,12 @@ export default function SuperAdminPage() {
                           orderPrefix: e.target.value.toUpperCase(),
                         }))
                       }
-                      className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 font-mono text-sm text-foreground"
+                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 font-mono text-sm text-foreground outline-none focus:border-accent"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-foreground">
-                      Quotation Reference Prefix
+                    <label className="mb-1 block text-xs font-medium text-foreground">
+                      Quotation Prefix
                     </label>
                     <input
                       value={settingsForm.quotePrefix}
@@ -1472,12 +1416,12 @@ export default function SuperAdminPage() {
                           quotePrefix: e.target.value.toUpperCase(),
                         }))
                       }
-                      className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 font-mono text-sm text-foreground"
+                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 font-mono text-sm text-foreground outline-none focus:border-accent"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-foreground">
-                      Chat Ticket Prefix
+                    <label className="mb-1 block text-xs font-medium text-foreground">
+                      Ticket Prefix
                     </label>
                     <input
                       value={settingsForm.ticketPrefix}
@@ -1487,7 +1431,7 @@ export default function SuperAdminPage() {
                           ticketPrefix: e.target.value.toUpperCase(),
                         }))
                       }
-                      className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 font-mono text-sm text-foreground"
+                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 font-mono text-sm text-foreground outline-none focus:border-accent"
                     />
                   </div>
                 </div>
@@ -1495,7 +1439,7 @@ export default function SuperAdminPage() {
                 {/* Contact & Shop Info */}
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-foreground">
+                    <label className="mb-1 block text-xs font-medium text-foreground">
                       Contact Email
                     </label>
                     <input
@@ -1506,12 +1450,12 @@ export default function SuperAdminPage() {
                           contactEmail: e.target.value,
                         }))
                       }
-                      className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
+                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-foreground">
-                      Contact Phone / Hotline
+                    <label className="mb-1 block text-xs font-medium text-foreground">
+                      Telephone
                     </label>
                     <input
                       value={settingsForm.contactPhone}
@@ -1521,12 +1465,12 @@ export default function SuperAdminPage() {
                           contactPhone: e.target.value,
                         }))
                       }
-                      className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
+                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 font-mono text-xs text-foreground outline-none focus:border-accent"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-foreground">
-                      Shop Physical Address
+                    <label className="mb-1 block text-xs font-medium text-foreground">
+                      Studio Address
                     </label>
                     <input
                       value={settingsForm.shopAddress}
@@ -1536,11 +1480,11 @@ export default function SuperAdminPage() {
                           shopAddress: e.target.value,
                         }))
                       }
-                      className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
+                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-foreground">
+                    <label className="mb-1 block text-xs font-medium text-foreground">
                       Operating Hours
                     </label>
                     <input
@@ -1551,15 +1495,14 @@ export default function SuperAdminPage() {
                           businessHours: e.target.value,
                         }))
                       }
-                      className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
+                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-foreground">
-                    Payment & Downpayment Instructions (Displayed on Invoices &
-                    Footer)
+                  <label className="mb-1 block text-xs font-medium text-foreground">
+                    Settlement & Production Terms
                   </label>
                   <textarea
                     rows={2}
@@ -1570,13 +1513,13 @@ export default function SuperAdminPage() {
                         paymentInstructions: e.target.value,
                       }))
                     }
-                    className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
+                    className="w-full rounded-lg border border-separator bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
                   />
                 </div>
 
                 {/* Chat Queue Routing */}
-                <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl bg-surface-secondary/50 p-4">
-                  <label className="flex items-center gap-2.5 text-xs font-semibold text-foreground">
+                <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-separator bg-background p-4">
+                  <label className="flex items-center gap-2.5 text-xs font-medium text-foreground">
                     <input
                       type="checkbox"
                       checked={settingsForm.autoAssignTickets}
@@ -1586,13 +1529,13 @@ export default function SuperAdminPage() {
                           autoAssignTickets: e.target.checked,
                         }))
                       }
-                      className="h-4 w-4 accent-blue-600"
+                      className="h-4 w-4 accent-current"
                     />
-                    Auto-assign incoming chat tickets to online employees
+                    Automatically assign incoming tickets to on-duty specialists
                   </label>
 
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="text-muted">Max active chats / staff:</span>
+                  <div className="flex items-center gap-2 text-xs tabular-nums">
+                    <span className="text-muted">Max active / staff:</span>
                     <input
                       type="number"
                       min={1}
@@ -1607,62 +1550,69 @@ export default function SuperAdminPage() {
                           ),
                         }))
                       }
-                      className="w-16 rounded-lg border border-separator bg-surface px-2.5 py-1 text-center font-bold text-foreground"
+                      className="h-8 w-16 rounded-md border border-separator bg-surface px-2 text-center font-mono font-medium text-foreground outline-none focus:border-accent"
                     />
                   </div>
                 </div>
               </form>
             </Card>
 
-            {/* Live Supabase Status Card */}
+            {/* Live Database & Security Posture Card */}
             <Card className="border border-separator bg-surface p-6 space-y-4 lg:col-span-4 h-fit">
-              <div className="flex items-center gap-2 text-sm font-bold text-foreground">
-                <Database className="h-4 w-4 text-accent" />
-                Live Database Status
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-foreground">
+                  Database & Security Posture
+                </span>
+                <Chip
+                  size="sm"
+                  color={supabaseConnected ? "success" : "danger"}
+                  variant="soft"
+                >
+                  {supabaseConnected ? "Connected" : "Offline"}
+                </Chip>
               </div>
-              <Chip
-                size="sm"
-                color={supabaseConnected ? "success" : "danger"}
-                variant="soft"
-              >
-                {supabaseConnected
-                  ? "Connected to Supabase PostgreSQL"
-                  : "Supabase Not Configured"}
-              </Chip>
-              <div className="divide-y divide-separator rounded-xl border border-separator bg-surface-secondary/40 px-3.5 text-xs">
+              <div className="divide-y divide-separator rounded-lg border border-separator bg-background px-3.5 text-xs tabular-nums">
                 <div className="flex justify-between py-2.5">
-                  <span className="text-muted">Products</span>
-                  <strong className="text-foreground">{products.length}</strong>
+                  <span className="text-muted">Published Products</span>
+                  <span className="font-mono font-medium text-foreground">
+                    {products.length}
+                  </span>
                 </div>
                 <div className="flex justify-between py-2.5">
-                  <span className="text-muted">Size Pricing Tiers</span>
-                  <strong className="text-foreground">
+                  <span className="text-muted">Size Schedules</span>
+                  <span className="font-mono font-medium text-foreground">
                     {products.reduce((acc, p) => acc + p.sizes.length, 0)}
-                  </strong>
+                  </span>
                 </div>
                 <div className="flex justify-between py-2.5">
-                  <span className="text-muted">Inquiries & Quotations</span>
-                  <strong className="text-foreground">
+                  <span className="text-muted">Quotations</span>
+                  <span className="font-mono font-medium text-foreground">
                     {inquiries.length}
-                  </strong>
+                  </span>
                 </div>
                 <div className="flex justify-between py-2.5">
-                  <span className="text-muted">Orders</span>
-                  <strong className="text-foreground">{orders.length}</strong>
+                  <span className="text-muted">Production Orders</span>
+                  <span className="font-mono font-medium text-foreground">
+                    {orders.length}
+                  </span>
                 </div>
                 <div className="flex justify-between py-2.5">
                   <span className="text-muted">Support Tickets</span>
-                  <strong className="text-foreground">{tickets.length}</strong>
+                  <span className="font-mono font-medium text-foreground">
+                    {tickets.length}
+                  </span>
                 </div>
                 <div className="flex justify-between py-2.5">
-                  <span className="text-muted">Accounts</span>
-                  <strong className="text-foreground">{users.length}</strong>
+                  <span className="text-muted">Registered Accounts</span>
+                  <span className="font-mono font-medium text-foreground">
+                    {users.length}
+                  </span>
                 </div>
               </div>
               <p className="text-xs leading-relaxed text-muted">
-                All products, size tiers, inquiries, orders, chat messages, and
-                settings are stored directly in Supabase PostgreSQL with Row
-                Level Security and Realtime sync.
+                Protected by PostgreSQL Row Level Security, server-side pricing
+                RPCs, non-enumerable CSPRNG reference codes, and HTTP Content
+                Security Policy headers.
               </p>
             </Card>
           </div>

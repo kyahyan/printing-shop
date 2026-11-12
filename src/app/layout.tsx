@@ -17,9 +17,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Clayjar Print Studio — Custom Printing, Quotations & Order Portal",
+  title: "Clayjar Print Studio — Commercial Print, Estimating & Order Portal",
   description:
-    "Commercial printing shop platform with transparent price-per-size matrices, instant custom quotations, reference tracking, and queued customer support chat.",
+    "Commercial printing specifications, per-size pricing schedules, formal project quotations, production tracking, and client support.",
 };
 
 export default function RootLayout({
@@ -28,9 +28,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className="light" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} min-h-screen bg-background text-foreground flex flex-col`}
+        className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased min-h-screen bg-background text-foreground flex flex-col`}
       >
         <Providers>
           <Navbar />

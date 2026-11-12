@@ -6,6 +6,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { createClient } from "@supabase/supabase-js";
@@ -30,10 +31,15 @@ import {
   getSupabasePublicKey,
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
+import {
+  getStoredTicketTokens,
+  sanitizeExternalUrl,
+  saveStoredTicketToken,
+} from "@/lib/security";
 
 const DEFAULT_SETTINGS: AppSettings = {
   shopName: "Clayjar Print Studio",
-  tagline: "Precision Commercial Printing, Custom Packaging & Large Format",
+  tagline: "Commercial Printing, Custom Packaging & Large Format Production",
   currencyCode: "PHP",
   currencySymbol: "₱",
   taxRate: 12,
@@ -44,9 +50,9 @@ const DEFAULT_SETTINGS: AppSettings = {
   contactEmail: "hello@clayjar.com.ph",
   contactPhone: "+63 (02) 8555-0194",
   shopAddress: "Metro Manila, Philippines",
-  businessHours: "Mon – Sat: 8:30 AM – 6:30 PM",
+  businessHours: "Mon – Sat, 8:30 AM – 6:30 PM",
   paymentInstructions:
-    "50% downpayment required to initiate printing. Include your Order Reference Number in the payment note.",
+    "50% downpayment required to initiate production. Include your Order Reference Number in the payment note.",
   autoAssignTickets: false,
   maxActiveChatsPerEmployee: 5,
 };
@@ -59,6 +65,18 @@ export interface PriceBreakdown {
   setupFee: number;
   lineTotal: number;
   appliedTier: "Standard" | "100+ Bulk" | "500+ Wholesale";
+}
+
+export interface PublicQueueSummary {
+  onlineSpecialists: number;
+  queuedTickets: number;
+}
+
+export interface ReferenceLookupResult {
+  found: boolean;
+  order?: Order;
+  inquiry?: InquiryQuotation;
+  ticket?: ChatTicket;
 }
 
 interface CreateInquiryInput {
@@ -109,6 +127,7 @@ interface PrintShopContextValue {
   loading: boolean;
   supabaseConnected: boolean;
   settings: AppSettings;
+  queueSummary: PublicQueueSummary;
   users: UserProfile[];
   currentUser: UserProfile | null;
   products: Product[];
@@ -116,6 +135,7 @@ interface PrintShopContextValue {
   orders: Order[];
   tickets: ChatTicket[];
   refreshData: () => Promise<void>;
+  refreshTicketSession: (ticketId: string) => Promise<void>;
   formatCurrency: (amount: number) => string;
   calculateProductPrice: (
     product: Product,
@@ -160,7 +180,7 @@ interface PrintShopContextValue {
     status: QuotationStatus
   ) => Promise<void>;
   convertQuotationToOrder: (
-    inquiryId: string,
+    inquiryIdOrRef: string,
     paymentInfo?: {
       paymentStatus?: PaymentStatus;
       amountPaid?: number;
@@ -186,6 +206,7 @@ interface PrintShopContextValue {
     inquiry?: InquiryQuotation;
     ticket?: ChatTicket;
   };
+  lookupReference: (ref: string) => Promise<ReferenceLookupResult>;
   // Chat Queue & Ticketing
   openChatTicket: (input: OpenTicketInput) => Promise<ChatTicket>;
   claimTicket: (ticketId: string) => Promise<void>;
@@ -208,11 +229,15 @@ interface PrintShopContextValue {
   ) => Promise<void>;
   getQueuePosition: (ticketId: string) => number;
   // Super Admin & Staff Database Controls
-  updateSettings: (next: AppSettings) => Promise<{ ok: boolean; error?: string }>;
+  updateSettings: (
+    next: AppSettings
+  ) => Promise<{ ok: boolean; error?: string }>;
   upsertProduct: (
     product: Product
   ) => Promise<{ ok: boolean; error?: string; product?: Product }>;
-  deleteProduct: (productId: string) => Promise<{ ok: boolean; error?: string }>;
+  deleteProduct: (
+    productId: string
+  ) => Promise<{ ok: boolean; error?: string }>;
   provisionStaffAccount: (input: {
     fullName: string;
     email: string;
@@ -227,10 +252,142 @@ interface PrintShopContextValue {
 
 const PrintShopContext = createContext<PrintShopContextValue | null>(null);
 
-function makeRandomDigits(len = 4): string {
-  const min = Math.pow(10, len - 1);
-  const max = Math.pow(10, len) - 1;
-  return String(Math.floor(min + Math.random() * (max - min)));
+function makeSecureToken(len = 8): string {
+  const alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+    const bytes = new Uint8Array(len);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
+  }
+  return Array.from(
+    { length: len },
+    () => alphabet[Math.floor(Math.random() * alphabet.length)]
+  ).join("");
+}
+
+function mapInquiryRow(q: Record<string, unknown>): InquiryQuotation {
+  return {
+    id: String(q.id),
+    referenceNumber: String(q.reference_number),
+    customerId: q.customer_id ? String(q.customer_id) : undefined,
+    customerName: String(q.customer_name),
+    customerEmail: String(q.customer_email || ""),
+    customerPhone: String(q.customer_phone || ""),
+    companyName: q.company_name ? String(q.company_name) : undefined,
+    subject: String(q.subject),
+    productId: q.product_id ? String(q.product_id) : undefined,
+    productName: String(q.product_name),
+    selectedSize: String(q.selected_size),
+    material: String(q.material || ""),
+    finish: String(q.finish || ""),
+    quantity: Number(q.quantity),
+    customDimensions: q.custom_dimensions
+      ? String(q.custom_dimensions)
+      : undefined,
+    artworkUrl: sanitizeExternalUrl(
+      q.artwork_url ? String(q.artwork_url) : null
+    ) ?? undefined,
+    notes: q.notes ? String(q.notes) : undefined,
+    targetDate: q.target_date ? String(q.target_date) : undefined,
+    status: q.status as QuotationStatus,
+    quotedUnitPrice:
+      q.quoted_unit_price != null ? Number(q.quoted_unit_price) : undefined,
+    quotedSetupFee:
+      q.quoted_setup_fee != null ? Number(q.quoted_setup_fee) : undefined,
+    quotedDiscount:
+      q.quoted_discount != null ? Number(q.quoted_discount) : undefined,
+    quotedTotal: q.quoted_total != null ? Number(q.quoted_total) : undefined,
+    staffRemarks: q.staff_remarks ? String(q.staff_remarks) : undefined,
+    validUntil: q.valid_until ? String(q.valid_until) : undefined,
+    handledBy: q.handled_by ? String(q.handled_by) : undefined,
+    handledByName: q.handled_by_name ? String(q.handled_by_name) : undefined,
+    convertedOrderRef: q.converted_order_ref
+      ? String(q.converted_order_ref)
+      : undefined,
+    createdAt: String(q.created_at),
+    updatedAt: String(q.updated_at),
+  };
+}
+
+function mapOrderRow(o: Record<string, unknown>): Order {
+  return {
+    id: String(o.id),
+    referenceNumber: String(o.reference_number),
+    quotationId: o.quotation_id ? String(o.quotation_id) : undefined,
+    customerId: o.customer_id ? String(o.customer_id) : undefined,
+    customerName: String(o.customer_name),
+    customerEmail: String(o.customer_email || ""),
+    customerPhone: String(o.customer_phone || ""),
+    orderSource: o.order_source as Order["orderSource"],
+    items: (o.items as OrderItem[]) || [],
+    subtotal: Number(o.subtotal),
+    taxAmount: Number(o.tax_amount),
+    discountAmount: Number(o.discount_amount),
+    totalAmount: Number(o.total_amount),
+    amountPaid: Number(o.amount_paid),
+    paymentStatus: o.payment_status as PaymentStatus,
+    paymentMethod: String(o.payment_method),
+    productionStatus: o.production_status as ProductionStatus,
+    deliveryMethod: o.delivery_method as Order["deliveryMethod"],
+    notes: o.notes ? String(o.notes) : undefined,
+    takenByEmployeeId: o.taken_by_employee_id
+      ? String(o.taken_by_employee_id)
+      : undefined,
+    takenByName: o.taken_by_name ? String(o.taken_by_name) : undefined,
+    estimatedCompletion: o.estimated_completion
+      ? String(o.estimated_completion)
+      : undefined,
+    createdAt: String(o.created_at),
+    updatedAt: String(o.updated_at),
+  };
+}
+
+function mapTicketRow(
+  t: Record<string, unknown>,
+  queuePosOverride?: number
+): ChatTicket {
+  const rawMsgs = Array.isArray(t.chat_messages)
+    ? (t.chat_messages as Record<string, unknown>[])
+    : [];
+  const sortedMsgs = [...rawMsgs].sort(
+    (a, b) =>
+      new Date(String(a.created_at)).getTime() -
+      new Date(String(b.created_at)).getTime()
+  );
+  return {
+    id: String(t.id),
+    ticketNumber: String(t.ticket_number),
+    customerId: t.customer_id ? String(t.customer_id) : undefined,
+    customerName: String(t.customer_name),
+    customerEmail: t.customer_email ? String(t.customer_email) : "",
+    topic: String(t.topic),
+    linkedReference: t.linked_reference
+      ? String(t.linked_reference)
+      : undefined,
+    priority: (t.priority as TicketPriority) || "normal",
+    status: (t.status as TicketStatus) || "queued",
+    assignedEmployeeId: t.assigned_employee_id
+      ? String(t.assigned_employee_id)
+      : undefined,
+    assignedEmployeeName: t.assigned_employee_name
+      ? String(t.assigned_employee_name)
+      : undefined,
+    internalNotes: t.internal_notes ? String(t.internal_notes) : undefined,
+    queuePosition:
+      queuePosOverride ??
+      (t.queue_position != null ? Number(t.queue_position) : undefined),
+    queuedAt: String(t.queued_at),
+    claimedAt: t.claimed_at ? String(t.claimed_at) : undefined,
+    resolvedAt: t.resolved_at ? String(t.resolved_at) : undefined,
+    messages: sortedMsgs.map((m) => ({
+      id: String(m.id),
+      ticketId: String(m.ticket_id),
+      senderRole: m.sender_role as ChatMessage["senderRole"],
+      senderName: String(m.sender_name),
+      message: String(m.message),
+      createdAt: String(m.created_at),
+    })),
+  };
 }
 
 export function PrintShopProvider({ children }: { children: React.ReactNode }) {
@@ -238,12 +395,46 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [queueSummary, setQueueSummary] = useState<PublicQueueSummary>({
+    onlineSpecialists: 0,
+    queuedTickets: 0,
+  });
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const currentUserRef = useRef<UserProfile | null>(null);
+  currentUserRef.current = currentUser;
+
   const [products, setProducts] = useState<Product[]>([]);
   const [inquiries, setInquiries] = useState<InquiryQuotation[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [tickets, setTickets] = useState<ChatTicket[]>([]);
+
+  const loadStoredGuestTickets = useCallback(async (): Promise<ChatTicket[]> => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return [];
+    const tokenMap = getStoredTicketTokens();
+    const entries = Object.entries(tokenMap).filter(([id]) =>
+      UUID_REGEX.test(id)
+    );
+    if (entries.length === 0) return [];
+
+    const results = await Promise.all(
+      entries.map(async ([ticketId, token]) => {
+        const { data } = await supabase.rpc("get_chat_ticket_session", {
+          p_ticket_id: ticketId,
+          p_access_token: token,
+        });
+        if (data && typeof data === "object" && "ticket" in data && data.ticket) {
+          return mapTicketRow(
+            data.ticket as Record<string, unknown>,
+            Number((data as Record<string, unknown>).queuePosition ?? 0)
+          );
+        }
+        return null;
+      })
+    );
+    return results.filter((t): t is ChatTicket => t !== null);
+  }, []);
 
   const refreshData = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
@@ -252,35 +443,15 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const [
-      settingsRes,
-      productsRes,
-      inquiriesRes,
-      ordersRes,
-      ticketsRes,
-      profilesRes,
-    ] = await Promise.all([
+    // 1. Public Catalog, Settings & Non-PII Queue Summary
+    const [settingsRes, productsRes, queueRes, sessionRes] = await Promise.all([
       supabase.from("app_settings").select("*").eq("id", 1).maybeSingle(),
       supabase
         .from("products")
         .select("*, product_sizes(*)")
         .order("created_at", { ascending: true }),
-      supabase
-        .from("inquiries_quotations")
-        .select("*")
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("orders")
-        .select("*")
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("chat_tickets")
-        .select("*, chat_messages(*)")
-        .order("queued_at", { ascending: true }),
-      supabase
-        .from("profiles")
-        .select("*")
-        .order("created_at", { ascending: true }),
+      supabase.rpc("get_public_queue_summary"),
+      supabase.auth.getSession(),
     ]);
 
     if (settingsRes.data) {
@@ -302,6 +473,14 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
         paymentInstructions: s.payment_instructions,
         autoAssignTickets: s.auto_assign_tickets,
         maxActiveChatsPerEmployee: s.max_active_chats_per_employee,
+      });
+    }
+
+    if (queueRes.data && typeof queueRes.data === "object") {
+      const qd = queueRes.data as Record<string, unknown>;
+      setQueueSummary({
+        onlineSpecialists: Number(qd.onlineSpecialists ?? 0),
+        queuedTickets: Number(qd.queuedTickets ?? 0),
       });
     }
 
@@ -350,156 +529,148 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
       );
     }
 
-    if (inquiriesRes.data) {
-      setInquiries(
-        inquiriesRes.data.map((q: Record<string, unknown>) => ({
-          id: String(q.id),
-          referenceNumber: String(q.reference_number),
-          customerId: q.customer_id ? String(q.customer_id) : undefined,
-          customerName: String(q.customer_name),
-          customerEmail: String(q.customer_email),
-          customerPhone: String(q.customer_phone),
-          companyName: q.company_name ? String(q.company_name) : undefined,
-          subject: String(q.subject),
-          productId: q.product_id ? String(q.product_id) : undefined,
-          productName: String(q.product_name),
-          selectedSize: String(q.selected_size),
-          material: String(q.material || ""),
-          finish: String(q.finish || ""),
-          quantity: Number(q.quantity),
-          customDimensions: q.custom_dimensions
-            ? String(q.custom_dimensions)
-            : undefined,
-          artworkUrl: q.artwork_url ? String(q.artwork_url) : undefined,
-          notes: q.notes ? String(q.notes) : undefined,
-          targetDate: q.target_date ? String(q.target_date) : undefined,
-          status: q.status as QuotationStatus,
-          quotedUnitPrice:
-            q.quoted_unit_price != null
-              ? Number(q.quoted_unit_price)
-              : undefined,
-          quotedSetupFee:
-            q.quoted_setup_fee != null ? Number(q.quoted_setup_fee) : undefined,
-          quotedDiscount:
-            q.quoted_discount != null ? Number(q.quoted_discount) : undefined,
-          quotedTotal:
-            q.quoted_total != null ? Number(q.quoted_total) : undefined,
-          staffRemarks: q.staff_remarks ? String(q.staff_remarks) : undefined,
-          validUntil: q.valid_until ? String(q.valid_until) : undefined,
-          handledBy: q.handled_by ? String(q.handled_by) : undefined,
-          handledByName: q.handled_by_name
-            ? String(q.handled_by_name)
-            : undefined,
-          convertedOrderRef: q.converted_order_ref
-            ? String(q.converted_order_ref)
-            : undefined,
-          createdAt: String(q.created_at),
-          updatedAt: String(q.updated_at),
-        }))
-      );
+    const activeSessionUser = sessionRes.data.session?.user ?? null;
+
+    if (!activeSessionUser) {
+      // Guest session: never query protected PII tables directly; load only token-scoped guest chat tickets
+      setInquiries([]);
+      setOrders([]);
+      setUsers([]);
+      const guestTickets = await loadStoredGuestTickets();
+      setTickets(guestTickets);
+      setLoading(false);
+      return;
     }
 
-    if (ordersRes.data) {
-      setOrders(
-        ordersRes.data.map((o: Record<string, unknown>) => ({
-          id: String(o.id),
-          referenceNumber: String(o.reference_number),
-          quotationId: o.quotation_id ? String(o.quotation_id) : undefined,
-          customerId: o.customer_id ? String(o.customer_id) : undefined,
-          customerName: String(o.customer_name),
-          customerEmail: String(o.customer_email),
-          customerPhone: String(o.customer_phone),
-          orderSource: o.order_source as Order["orderSource"],
-          items: (o.items as OrderItem[]) || [],
-          subtotal: Number(o.subtotal),
-          taxAmount: Number(o.tax_amount),
-          discountAmount: Number(o.discount_amount),
-          totalAmount: Number(o.total_amount),
-          amountPaid: Number(o.amount_paid),
-          paymentStatus: o.payment_status as PaymentStatus,
-          paymentMethod: String(o.payment_method),
-          productionStatus: o.production_status as ProductionStatus,
-          deliveryMethod: o.delivery_method as Order["deliveryMethod"],
-          notes: o.notes ? String(o.notes) : undefined,
-          takenByEmployeeId: o.taken_by_employee_id
-            ? String(o.taken_by_employee_id)
-            : undefined,
-          takenByName: o.taken_by_name ? String(o.taken_by_name) : undefined,
-          estimatedCompletion: o.estimated_completion
-            ? String(o.estimated_completion)
-            : undefined,
-          createdAt: String(o.created_at),
-          updatedAt: String(o.updated_at),
-        }))
-      );
-    }
+    // Authenticated user: determine role from profiles
+    const { data: ownProfile } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", activeSessionUser.id)
+      .maybeSingle();
 
-    if (ticketsRes.data) {
-      setTickets(
-        ticketsRes.data.map((t: Record<string, unknown>) => {
-          const rawMsgs = Array.isArray(t.chat_messages)
-            ? (t.chat_messages as Record<string, unknown>[])
-            : [];
-          const sortedMsgs = [...rawMsgs].sort(
-            (a, b) =>
-              new Date(String(a.created_at)).getTime() -
-              new Date(String(b.created_at)).getTime()
-          );
-          return {
-            id: String(t.id),
-            ticketNumber: String(t.ticket_number),
-            customerId: t.customer_id ? String(t.customer_id) : undefined,
-            customerName: String(t.customer_name),
-            customerEmail: String(t.customer_email),
-            topic: String(t.topic),
-            linkedReference: t.linked_reference
-              ? String(t.linked_reference)
-              : undefined,
-            priority: t.priority as TicketPriority,
-            status: t.status as TicketStatus,
-            assignedEmployeeId: t.assigned_employee_id
-              ? String(t.assigned_employee_id)
-              : undefined,
-            assignedEmployeeName: t.assigned_employee_name
-              ? String(t.assigned_employee_name)
-              : undefined,
-            internalNotes: t.internal_notes
-              ? String(t.internal_notes)
-              : undefined,
-            queuedAt: String(t.queued_at),
-            claimedAt: t.claimed_at ? String(t.claimed_at) : undefined,
-            resolvedAt: t.resolved_at ? String(t.resolved_at) : undefined,
-            messages: sortedMsgs.map((m) => ({
-              id: String(m.id),
-              ticketId: String(m.ticket_id),
-              senderRole: m.sender_role as ChatMessage["senderRole"],
-              senderName: String(m.sender_name),
-              message: String(m.message),
-              createdAt: String(m.created_at),
-            })),
-          };
-        })
-      );
-    }
+    const isStaff =
+      ownProfile?.is_active &&
+      (ownProfile.role === "employee" || ownProfile.role === "super_admin");
 
-    if (profilesRes.data) {
-      setUsers(
-        profilesRes.data.map((u: Record<string, unknown>) => ({
-          id: String(u.id),
-          fullName: String(u.full_name),
-          email: String(u.email),
-          phone: u.phone ? String(u.phone) : "",
-          companyName: u.company_name ? String(u.company_name) : undefined,
-          role: (u.role as UserProfile["role"]) || "customer",
-          department: u.department ? String(u.department) : undefined,
-          isActive: Boolean(u.is_active ?? true),
-          isOnline: Boolean(u.is_online ?? false),
-          createdAt: String(u.created_at),
-        }))
-      );
+    if (isStaff) {
+      const [inquiriesRes, ordersRes, ticketsRes, profilesRes] =
+        await Promise.all([
+          supabase
+            .from("inquiries_quotations")
+            .select("*")
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("orders")
+            .select("*")
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("chat_tickets")
+            .select("*, chat_messages(*)")
+            .order("queued_at", { ascending: true }),
+          supabase
+            .from("profiles")
+            .select("*")
+            .order("created_at", { ascending: true }),
+        ]);
+
+      if (inquiriesRes.data) {
+        setInquiries(inquiriesRes.data.map(mapInquiryRow));
+      }
+      if (ordersRes.data) {
+        setOrders(ordersRes.data.map(mapOrderRow));
+      }
+      if (ticketsRes.data) {
+        setTickets(ticketsRes.data.map((t) => mapTicketRow(t)));
+      }
+      if (profilesRes.data) {
+        setUsers(
+          profilesRes.data.map((u: Record<string, unknown>) => ({
+            id: String(u.id),
+            fullName: String(u.full_name),
+            email: String(u.email),
+            phone: u.phone ? String(u.phone) : "",
+            companyName: u.company_name ? String(u.company_name) : undefined,
+            role: (u.role as UserProfile["role"]) || "customer",
+            department: u.department ? String(u.department) : undefined,
+            isActive: Boolean(u.is_active ?? true),
+            isOnline: Boolean(u.is_online ?? false),
+            createdAt: String(u.created_at),
+          }))
+        );
+      }
+    } else {
+      // Authenticated Customer: read own inquiries/orders via ownership RLS + own tickets via sanitized RPC
+      const [inquiriesRes, ordersRes, myTicketsRes, guestTickets] =
+        await Promise.all([
+          supabase
+            .from("inquiries_quotations")
+            .select("*")
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("orders")
+            .select("*")
+            .order("created_at", { ascending: false }),
+          supabase.rpc("get_my_chat_tickets"),
+          loadStoredGuestTickets(),
+        ]);
+
+      if (inquiriesRes.data) {
+        setInquiries(inquiriesRes.data.map(mapInquiryRow));
+      }
+      if (ordersRes.data) {
+        setOrders(ordersRes.data.map(mapOrderRow));
+      }
+      const accountTickets = Array.isArray(myTicketsRes.data)
+        ? (myTicketsRes.data as Record<string, unknown>[]).map((t) =>
+            mapTicketRow(t)
+          )
+        : [];
+      const mergedMap = new Map<string, ChatTicket>();
+      accountTickets.forEach((t) => mergedMap.set(t.id, t));
+      guestTickets.forEach((t) => mergedMap.set(t.id, t));
+      setTickets(Array.from(mergedMap.values()));
+      setUsers([]);
     }
 
     setLoading(false);
+  }, [loadStoredGuestTickets]);
+
+  const refreshTicketSession = useCallback(async (ticketId: string) => {
+    if (!UUID_REGEX.test(ticketId)) return;
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+
+    const tokenMap = getStoredTicketTokens();
+    const token = tokenMap[ticketId] ?? null;
+
+    const [{ data }, queueRes] = await Promise.all([
+      supabase.rpc("get_chat_ticket_session", {
+        p_ticket_id: ticketId,
+        p_access_token: token,
+      }),
+      supabase.rpc("get_public_queue_summary"),
+    ]);
+
+    if (queueRes.data && typeof queueRes.data === "object") {
+      const qd = queueRes.data as Record<string, unknown>;
+      setQueueSummary({
+        onlineSpecialists: Number(qd.onlineSpecialists ?? 0),
+        queuedTickets: Number(qd.queuedTickets ?? 0),
+      });
+    }
+
+    if (data && typeof data === "object" && "ticket" in data && data.ticket) {
+      const updated = mapTicketRow(
+        data.ticket as Record<string, unknown>,
+        Number((data as Record<string, unknown>).queuePosition ?? 0)
+      );
+      setTickets((prev) => {
+        const exists = prev.some((t) => t.id === updated.id);
+        if (!exists) return [updated, ...prev];
+        return prev.map((t) => (t.id === updated.id ? updated : t));
+      });
+    }
   }, []);
 
   useEffect(() => {
@@ -679,7 +850,7 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
     async (email: string, password: string, staffOnly = false) => {
       const supabase = getSupabaseBrowserClient();
       if (!supabase) {
-        return { ok: false, error: "Supabase client is not configured." };
+        return { ok: false, error: "Database connection is not configured." };
       }
 
       const cleanEmail = email.trim().toLowerCase();
@@ -691,7 +862,7 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
       if (error || !data.user) {
         return {
           ok: false,
-          error: error?.message || "Invalid email or password.",
+          error: "Invalid email address or password.",
         };
       }
 
@@ -712,7 +883,7 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
         companyName: profile?.company_name || undefined,
         role: profile?.role || "customer",
         department: profile?.department || undefined,
-        isActive: profile?.is_active ?? true,
+        isActive: profile?.is_active ?? false,
         isOnline: profile?.is_online ?? true,
         createdAt: profile?.created_at || new Date().toISOString(),
       };
@@ -721,7 +892,7 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
         await supabase.auth.signOut();
         return {
           ok: false,
-          error: "This account has been deactivated by an administrator.",
+          error: "This account is currently inactive. Contact an administrator.",
         };
       }
 
@@ -729,7 +900,7 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
         await supabase.auth.signOut();
         return {
           ok: false,
-          error: "This portal is restricted to authorized Print Shop Staff.",
+          error: "Access restricted to authorized staff accounts.",
         };
       }
 
@@ -750,7 +921,14 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
     }) => {
       const supabase = getSupabaseBrowserClient();
       if (!supabase) {
-        return { ok: false, error: "Supabase client is not configured." };
+        return { ok: false, error: "Database connection is not configured." };
+      }
+
+      if (input.password.length < 8) {
+        return {
+          ok: false,
+          error: "Password must be at least 8 characters long.",
+        };
       }
 
       const cleanEmail = input.email.trim().toLowerCase();
@@ -808,79 +986,58 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
       await supabase.auth.signOut();
     }
     setCurrentUser(null);
+    setInquiries([]);
+    setOrders([]);
+    setUsers([]);
   }, []);
 
-  // INQUIRIES & QUOTATIONS
+  // INQUIRIES & QUOTATIONS (Server-validated RPC)
   const submitInquiry = useCallback(
     async (input: CreateInquiryInput): Promise<InquiryQuotation> => {
       const supabase = getSupabaseBrowserClient();
       if (!supabase) throw new Error("Database not connected");
-
-      const year = new Date().getFullYear();
-      const ref = `${settings.quotePrefix || "QT"}-${year}-${makeRandomDigits(4)}`;
 
       const validProductId =
         input.productId && UUID_REGEX.test(input.productId)
           ? input.productId
           : null;
 
-      const { data, error } = await supabase
-        .from("inquiries_quotations")
-        .insert({
-          reference_number: ref,
-          customer_id: currentUser ? currentUser.id : null,
-          customer_name: input.customerName,
-          customer_email: input.customerEmail,
-          customer_phone: input.customerPhone,
-          company_name: input.companyName ?? null,
-          subject: input.subject,
-          product_id: validProductId,
-          product_name: input.productName,
-          selected_size: input.selectedSize,
-          material: input.material,
-          finish: input.finish,
-          quantity: input.quantity,
-          custom_dimensions: input.customDimensions ?? null,
-          artwork_url: input.artworkUrl ?? null,
-          notes: input.notes ?? null,
-          target_date: input.targetDate || null,
-          status: "pending_review",
-        })
-        .select()
-        .single();
+      let safeArtwork: string | null = null;
+      if (input.artworkUrl && input.artworkUrl.trim()) {
+        safeArtwork = sanitizeExternalUrl(input.artworkUrl);
+        if (!safeArtwork) {
+          throw new Error(
+            "Artwork link must start with https:// (e.g., Google Drive, Dropbox, or Canva)."
+          );
+        }
+      }
+
+      const { data, error } = await supabase.rpc("create_public_inquiry", {
+        p_customer_name: input.customerName.trim(),
+        p_customer_email: input.customerEmail.trim().toLowerCase(),
+        p_customer_phone: input.customerPhone.trim(),
+        p_company_name: input.companyName?.trim() || null,
+        p_subject: input.subject.trim(),
+        p_product_id: validProductId,
+        p_product_name: input.productName.trim(),
+        p_selected_size: input.selectedSize.trim(),
+        p_material: input.material.trim(),
+        p_finish: input.finish.trim(),
+        p_quantity: Math.max(1, Math.floor(input.quantity)),
+        p_custom_dimensions: input.customDimensions?.trim() || null,
+        p_artwork_url: safeArtwork,
+        p_notes: input.notes?.trim() || null,
+        p_target_date: input.targetDate || null,
+      });
 
       if (error || !data) {
-        throw new Error(error?.message || "Failed to save inquiry.");
+        throw new Error(error?.message || "Failed to submit quotation inquiry.");
       }
 
       await refreshData();
-      return {
-        id: String(data.id),
-        referenceNumber: String(data.reference_number),
-        customerId: data.customer_id ? String(data.customer_id) : undefined,
-        customerName: String(data.customer_name),
-        customerEmail: String(data.customer_email),
-        customerPhone: String(data.customer_phone),
-        companyName: data.company_name ? String(data.company_name) : undefined,
-        subject: String(data.subject),
-        productId: data.product_id ? String(data.product_id) : undefined,
-        productName: String(data.product_name),
-        selectedSize: String(data.selected_size),
-        material: String(data.material || ""),
-        finish: String(data.finish || ""),
-        quantity: Number(data.quantity),
-        customDimensions: data.custom_dimensions
-          ? String(data.custom_dimensions)
-          : undefined,
-        artworkUrl: data.artwork_url ? String(data.artwork_url) : undefined,
-        notes: data.notes ? String(data.notes) : undefined,
-        targetDate: data.target_date ? String(data.target_date) : undefined,
-        status: data.status as QuotationStatus,
-        createdAt: String(data.created_at),
-        updatedAt: String(data.updated_at),
-      };
+      return mapInquiryRow(data as Record<string, unknown>);
     },
-    [currentUser, refreshData, settings.quotePrefix]
+    [refreshData]
   );
 
   const sendQuotation = useCallback(
@@ -915,15 +1072,15 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
           quoted_total: quotedTotal,
           staff_remarks: quote.staffRemarks,
           valid_until: quote.validUntil || null,
-          handled_by: currentUser?.id ?? null,
-          handled_by_name: currentUser?.fullName || "Print Estimator",
+          handled_by: currentUserRef.current?.id ?? null,
+          handled_by_name: currentUserRef.current?.fullName || "Estimator",
           updated_at: new Date().toISOString(),
         })
         .eq("id", inquiryId);
 
       await refreshData();
     },
-    [currentUser, inquiries, refreshData]
+    [inquiries, refreshData]
   );
 
   const updateInquiryStatus = useCallback(
@@ -945,19 +1102,74 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
       const supabase = getSupabaseBrowserClient();
       if (!supabase) throw new Error("Database not connected");
 
+      // Online customer/guest orders ALWAYS compute pricing server-side via RPC
+      const firstItem = input.items[0];
+      const isStaffUser =
+        currentUserRef.current &&
+        (currentUserRef.current.role === "employee" ||
+          currentUserRef.current.role === "super_admin");
+
+      if (
+        input.orderSource === "online" &&
+        firstItem?.productId &&
+        UUID_REGEX.test(firstItem.productId)
+      ) {
+        const matchedProd = products.find((p) => p.id === firstItem.productId);
+        const resolvedSizeId =
+          firstItem.sizeId ||
+          matchedProd?.sizes.find((s) => s.sizeLabel === firstItem.sizeLabel)
+            ?.id;
+
+        if (!resolvedSizeId || !UUID_REGEX.test(resolvedSizeId)) {
+          throw new Error("Please select a valid product size tier.");
+        }
+
+        const { data, error } = await supabase.rpc("create_online_order", {
+          p_customer_name: input.customerName.trim(),
+          p_customer_email: input.customerEmail.trim().toLowerCase(),
+          p_customer_phone: input.customerPhone.trim(),
+          p_product_id: firstItem.productId,
+          p_size_id: resolvedSizeId,
+          p_material: firstItem.material,
+          p_finish: firstItem.finish,
+          p_quantity: Math.max(1, Math.floor(firstItem.quantity)),
+          p_payment_method: input.paymentMethod,
+          p_delivery_method: input.deliveryMethod,
+          p_notes: input.notes?.trim() || null,
+        });
+
+        if (error || !data) {
+          throw new Error(error?.message || "Failed to place online order.");
+        }
+
+        await refreshData();
+        return mapOrderRow(data as Record<string, unknown>);
+      }
+
+      if (!isStaffUser) {
+        throw new Error("Counter orders require staff authentication.");
+      }
+
+      // Staff Walk-In / Multi-Item Counter Order
       const year = new Date().getFullYear();
-      const ref = `${settings.orderPrefix || "ORD"}-${year}-${makeRandomDigits(4)}`;
+      const ref = `${settings.orderPrefix || "ORD"}-${year}-${makeSecureToken(8)}`;
 
       const subtotal = Number(
         input.items.reduce((sum, item) => sum + item.lineTotal, 0).toFixed(2)
       );
-      const discountAmount = Number((input.discountAmount ?? 0).toFixed(2));
+      const discountAmount = Math.max(
+        0,
+        Number((input.discountAmount ?? 0).toFixed(2))
+      );
       const taxable = Math.max(0, subtotal - discountAmount);
       const taxAmount = Number(
         ((taxable * (settings.taxRate || 0)) / 100).toFixed(2)
       );
       const totalAmount = Number((taxable + taxAmount).toFixed(2));
-      const amountPaid = Number((input.amountPaid ?? 0).toFixed(2));
+      const amountPaid = Math.max(
+        0,
+        Number((input.amountPaid ?? 0).toFixed(2))
+      );
 
       const validQuoteId =
         input.quotationId && UUID_REGEX.test(input.quotationId)
@@ -969,11 +1181,10 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
         .insert({
           reference_number: ref,
           quotation_id: validQuoteId,
-          customer_id:
-            currentUser?.role === "customer" ? currentUser.id : null,
-          customer_name: input.customerName,
-          customer_email: input.customerEmail,
-          customer_phone: input.customerPhone,
+          customer_id: null,
+          customer_name: input.customerName.trim(),
+          customer_email: input.customerEmail.trim().toLowerCase(),
+          customer_phone: input.customerPhone.trim(),
           order_source: input.orderSource,
           items: input.items,
           subtotal,
@@ -985,64 +1196,27 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
           payment_method: input.paymentMethod,
           production_status: "received",
           delivery_method: input.deliveryMethod,
-          notes: input.notes ?? null,
-          taken_by_employee_id:
-            currentUser && currentUser.role !== "customer"
-              ? currentUser.id
-              : null,
-          taken_by_name:
-            currentUser && currentUser.role !== "customer"
-              ? currentUser.fullName
-              : null,
+          notes: input.notes?.trim() || null,
+          taken_by_employee_id: currentUserRef.current?.id ?? null,
+          taken_by_name: currentUserRef.current?.fullName ?? null,
           estimated_completion: input.estimatedCompletion || null,
         })
         .select()
         .single();
 
       if (error || !data) {
-        throw new Error(error?.message || "Failed to create order.");
+        throw new Error(error?.message || "Failed to create counter order.");
       }
 
       await refreshData();
-      return {
-        id: String(data.id),
-        referenceNumber: String(data.reference_number),
-        quotationId: data.quotation_id ? String(data.quotation_id) : undefined,
-        customerId: data.customer_id ? String(data.customer_id) : undefined,
-        customerName: String(data.customer_name),
-        customerEmail: String(data.customer_email),
-        customerPhone: String(data.customer_phone),
-        orderSource: data.order_source as Order["orderSource"],
-        items: (data.items as OrderItem[]) || [],
-        subtotal: Number(data.subtotal),
-        taxAmount: Number(data.tax_amount),
-        discountAmount: Number(data.discount_amount),
-        totalAmount: Number(data.total_amount),
-        amountPaid: Number(data.amount_paid),
-        paymentStatus: data.payment_status as PaymentStatus,
-        paymentMethod: String(data.payment_method),
-        productionStatus: data.production_status as ProductionStatus,
-        deliveryMethod: data.delivery_method as Order["deliveryMethod"],
-        notes: data.notes ? String(data.notes) : undefined,
-        takenByEmployeeId: data.taken_by_employee_id
-          ? String(data.taken_by_employee_id)
-          : undefined,
-        takenByName: data.taken_by_name
-          ? String(data.taken_by_name)
-          : undefined,
-        estimatedCompletion: data.estimated_completion
-          ? String(data.estimated_completion)
-          : undefined,
-        createdAt: String(data.created_at),
-        updatedAt: String(data.updated_at),
-      };
+      return mapOrderRow(data as Record<string, unknown>);
     },
-    [currentUser, refreshData, settings.orderPrefix, settings.taxRate]
+    [products, refreshData, settings.orderPrefix, settings.taxRate]
   );
 
   const convertQuotationToOrder = useCallback(
     async (
-      inquiryId: string,
+      inquiryIdOrRef: string,
       paymentInfo?: {
         paymentStatus?: PaymentStatus;
         amountPaid?: number;
@@ -1051,60 +1225,35 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
       }
     ): Promise<Order | null> => {
       const supabase = getSupabaseBrowserClient();
-      const inq = inquiries.find((i) => i.id === inquiryId);
-      if (!supabase || !inq) return null;
+      if (!supabase) return null;
 
-      const unitPrice = inq.quotedUnitPrice ?? 0;
-      const setupFee = inq.quotedSetupFee ?? 0;
-      const lineTotal = Number(
-        (unitPrice * inq.quantity + setupFee).toFixed(2)
+      const localMatch = inquiries.find(
+        (i) =>
+          i.id === inquiryIdOrRef ||
+          i.referenceNumber.toUpperCase() ===
+            inquiryIdOrRef.trim().toUpperCase()
+      );
+      const refToAccept = localMatch?.referenceNumber || inquiryIdOrRef.trim();
+
+      const { data, error } = await supabase.rpc(
+        "accept_quotation_by_reference",
+        {
+          p_reference: refToAccept,
+          p_payment_method: paymentInfo?.paymentMethod ?? "bank_transfer",
+          p_delivery_method: paymentInfo?.deliveryMethod ?? "pickup",
+        }
       );
 
-      const order = await createOrder({
-        customerName: inq.customerName,
-        customerEmail: inq.customerEmail,
-        customerPhone: inq.customerPhone,
-        orderSource: "from_quotation",
-        quotationId: inq.id,
-        quotationRef: inq.referenceNumber,
-        items: [
-          {
-            id: `item-${Date.now()}`,
-            productId: inq.productId,
-            productName: inq.productName,
-            sizeLabel: inq.customDimensions
-              ? `${inq.selectedSize} (${inq.customDimensions})`
-              : inq.selectedSize,
-            material: inq.material,
-            finish: inq.finish,
-            quantity: inq.quantity,
-            unitPrice,
-            setupFee,
-            lineTotal,
-          },
-        ],
-        discountAmount: inq.quotedDiscount ?? 0,
-        paymentStatus: paymentInfo?.paymentStatus ?? "unpaid",
-        amountPaid: paymentInfo?.amountPaid ?? 0,
-        paymentMethod: paymentInfo?.paymentMethod ?? "bank_transfer",
-        deliveryMethod: paymentInfo?.deliveryMethod ?? "pickup",
-        notes: `Converted from Quotation ${inq.referenceNumber}. ${inq.notes ?? ""}`.trim(),
-        estimatedCompletion: inq.targetDate,
-      });
-
-      await supabase
-        .from("inquiries_quotations")
-        .update({
-          status: "converted_to_order",
-          converted_order_ref: order.referenceNumber,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", inquiryId);
+      if (error || !data) {
+        throw new Error(
+          error?.message || "Could not convert quotation to order."
+        );
+      }
 
       await refreshData();
-      return order;
+      return mapOrderRow(data as Record<string, unknown>);
     },
-    [createOrder, inquiries, refreshData]
+    [inquiries, refreshData]
   );
 
   const updateOrderStatus = useCallback(
@@ -1139,7 +1288,7 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
     [refreshData]
   );
 
-  // REFERENCE FINDER
+  // REFERENCE FINDER (Local + Authoritative Server Lookup RPC)
   const findByReference = useCallback(
     (ref: string) => {
       const clean = ref.trim().toUpperCase();
@@ -1155,116 +1304,72 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
     [inquiries, orders, tickets]
   );
 
+  const lookupReference = useCallback(
+    async (ref: string): Promise<ReferenceLookupResult> => {
+      const clean = ref.trim();
+      if (clean.length < 5) return { found: false };
+
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) return { found: false };
+
+      const { data, error } = await supabase.rpc("lookup_reference_details", {
+        p_reference: clean,
+      });
+
+      if (error || !data || typeof data !== "object") {
+        return { found: false };
+      }
+
+      const payload = data as Record<string, unknown>;
+      return {
+        found: Boolean(payload.found),
+        order: payload.order
+          ? mapOrderRow(payload.order as Record<string, unknown>)
+          : undefined,
+        inquiry: payload.inquiry
+          ? mapInquiryRow(payload.inquiry as Record<string, unknown>)
+          : undefined,
+        ticket: payload.ticket
+          ? mapTicketRow(payload.ticket as Record<string, unknown>)
+          : undefined,
+      };
+    },
+    []
+  );
+
   // LIVE CHAT & TICKETING QUEUE
   const openChatTicket = useCallback(
     async (input: OpenTicketInput): Promise<ChatTicket> => {
       const supabase = getSupabaseBrowserClient();
       if (!supabase) throw new Error("Database not connected");
 
-      const ticketNumber = `${settings.ticketPrefix || "TKT"}-${makeRandomDigits(4)}`;
-      const now = new Date().toISOString();
+      const { data, error } = await supabase.rpc("open_public_chat_ticket", {
+        p_customer_name: input.customerName.trim(),
+        p_customer_email: input.customerEmail.trim().toLowerCase(),
+        p_topic: input.topic.trim(),
+        p_linked_reference: input.linkedReference?.trim() || null,
+        p_priority: input.priority ?? "normal",
+        p_initial_message: input.initialMessage.trim(),
+      });
 
-      let status: TicketStatus = "queued";
-      let assignedEmployeeId: string | undefined;
-      let assignedEmployeeName: string | undefined;
-      let claimedAt: string | undefined;
-
-      if (settings.autoAssignTickets) {
-        const onlineStaff = users.filter(
-          (u) =>
-            (u.role === "employee" || u.role === "super_admin") &&
-            u.isActive &&
-            u.isOnline
-        );
-        for (const emp of onlineStaff) {
-          const activeCount = tickets.filter(
-            (t) => t.status === "active" && t.assignedEmployeeId === emp.id
-          ).length;
-          if (activeCount < settings.maxActiveChatsPerEmployee) {
-            status = "active";
-            assignedEmployeeId = emp.id;
-            assignedEmployeeName = emp.fullName;
-            claimedAt = now;
-            break;
-          }
-        }
+      if (error || !data || typeof data !== "object") {
+        throw new Error(error?.message || "Failed to open support ticket.");
       }
 
-      const { data: ticketRow, error } = await supabase
-        .from("chat_tickets")
-        .insert({
-          ticket_number: ticketNumber,
-          customer_id: currentUser ? currentUser.id : null,
-          customer_name: input.customerName,
-          customer_email: input.customerEmail,
-          topic: input.topic,
-          linked_reference: input.linkedReference?.trim() || null,
-          priority: input.priority ?? "normal",
-          status,
-          assigned_employee_id: assignedEmployeeId ?? null,
-          assigned_employee_name: assignedEmployeeName ?? null,
-          claimed_at: claimedAt ?? null,
-        })
-        .select()
-        .single();
-
-      if (error || !ticketRow) {
-        throw new Error(error?.message || "Failed to open chat ticket.");
+      const resObj = data as Record<string, unknown>;
+      const mapped = mapTicketRow(
+        resObj.ticket as Record<string, unknown>,
+        Number(resObj.queuePosition ?? 0)
+      );
+      if (typeof resObj.accessToken === "string" && resObj.accessToken) {
+        saveStoredTicketToken(mapped.id, resObj.accessToken);
       }
 
-      const sysMessageText =
-        status === "active"
-          ? `Ticket ${ticketNumber} created and assigned to ${assignedEmployeeName}.`
-          : `Ticket ${ticketNumber} joined the Live Support Queue.${
-              input.linkedReference
-                ? ` Linked Reference: ${input.linkedReference}.`
-                : ""
-            }`;
-
-      await supabase.from("chat_messages").insert([
-        {
-          ticket_id: ticketRow.id,
-          sender_role: "system",
-          sender_name: "Queue Bot",
-          message: sysMessageText,
-        },
-        {
-          ticket_id: ticketRow.id,
-          sender_role: "customer",
-          sender_name: input.customerName,
-          message: input.initialMessage,
-        },
-      ]);
-
+      setTickets((prev) => [mapped, ...prev.filter((t) => t.id !== mapped.id)]);
       await refreshData();
-      return {
-        id: String(ticketRow.id),
-        ticketNumber,
-        customerId: ticketRow.customer_id
-          ? String(ticketRow.customer_id)
-          : undefined,
-        customerName: input.customerName,
-        customerEmail: input.customerEmail,
-        topic: input.topic,
-        linkedReference: input.linkedReference?.trim() || undefined,
-        priority: input.priority ?? "normal",
-        status,
-        assignedEmployeeId,
-        assignedEmployeeName,
-        queuedAt: String(ticketRow.queued_at),
-        claimedAt,
-        messages: [],
-      };
+      return mapped;
     },
-    [
-      currentUser,
-      refreshData,
-      settings.autoAssignTickets,
-      settings.maxActiveChatsPerEmployee,
-      settings.ticketPrefix,
-      tickets,
-      users,
-    ]
+    [refreshData]
   );
 
   const sortedQueuedTickets = useMemo(() => {
@@ -1285,10 +1390,14 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
 
   const getQueuePosition = useCallback(
     (ticketId: string) => {
+      const target = tickets.find((t) => t.id === ticketId);
+      if (target?.queuePosition && target.queuePosition > 0) {
+        return target.queuePosition;
+      }
       const idx = sortedQueuedTickets.findIndex((t) => t.id === ticketId);
       return idx === -1 ? 0 : idx + 1;
     },
-    [sortedQueuedTickets]
+    [sortedQueuedTickets, tickets]
   );
 
   const claimTicket = useCallback(
@@ -1296,14 +1405,14 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
       const supabase = getSupabaseBrowserClient();
       if (!supabase) return;
 
-      const staffName = currentUser?.fullName || "Print Specialist";
+      const staffName = currentUserRef.current?.fullName || "Support Specialist";
       const now = new Date().toISOString();
 
       await supabase
         .from("chat_tickets")
         .update({
           status: "active",
-          assigned_employee_id: currentUser?.id ?? null,
+          assigned_employee_id: currentUserRef.current?.id ?? null,
           assigned_employee_name: staffName,
           claimed_at: now,
         })
@@ -1312,13 +1421,13 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
       await supabase.from("chat_messages").insert({
         ticket_id: ticketId,
         sender_role: "system",
-        sender_name: "Queue Bot",
-        message: `${staffName} accepted your ticket and joined the chat.`,
+        sender_name: "System",
+        message: `${staffName} accepted your ticket and joined the conversation.`,
       });
 
       await refreshData();
     },
-    [currentUser, refreshData]
+    [refreshData]
   );
 
   const claimNextQueuedTicket =
@@ -1340,28 +1449,39 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
       const clean = message.trim();
       if (!supabase || !clean) return;
 
-      const role: ChatMessage["senderRole"] =
-        senderRole ??
-        (currentUser && currentUser.role !== "customer"
-          ? "employee"
-          : "customer");
-      const targetTicket = tickets.find((t) => t.id === ticketId);
-      const senderName =
-        senderNameOverride ||
-        (role === "employee"
-          ? currentUser?.fullName || "Print Specialist"
-          : currentUser?.fullName || targetTicket?.customerName || "Customer");
+      const user = currentUserRef.current;
+      const isStaff =
+        user && (user.role === "employee" || user.role === "super_admin");
+      const effectiveRole: ChatMessage["senderRole"] =
+        senderRole ?? (isStaff ? "employee" : "customer");
 
-      await supabase.from("chat_messages").insert({
-        ticket_id: ticketId,
-        sender_role: role,
-        sender_name: senderName,
-        message: clean,
+      if (isStaff && effectiveRole !== "customer") {
+        const senderName =
+          senderNameOverride || user?.fullName || "Support Specialist";
+        await supabase.from("chat_messages").insert({
+          ticket_id: ticketId,
+          sender_role: effectiveRole,
+          sender_name: senderName,
+          message: clean,
+        });
+        await refreshData();
+        return;
+      }
+
+      // Customer / Guest ticket message via authorized RPC
+      const tokenMap = getStoredTicketTokens();
+      const token = tokenMap[ticketId] ?? "";
+      const { error } = await supabase.rpc("send_customer_chat_message", {
+        p_ticket_id: ticketId,
+        p_access_token: token,
+        p_message: clean,
       });
-
-      await refreshData();
+      if (error) {
+        throw new Error(error.message || "Could not send message.");
+      }
+      await refreshTicketSession(ticketId);
     },
-    [currentUser, refreshData, tickets]
+    [refreshData, refreshTicketSession]
   );
 
   const updateTicketStatus = useCallback(
@@ -1396,14 +1516,16 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
         await supabase.from("chat_messages").insert({
           ticket_id: ticketId,
           sender_role: "system",
-          sender_name: "Queue Bot",
-          message: `Ticket marked as Resolved by ${currentUser?.fullName || "Staff"}.`,
+          sender_name: "System",
+          message: `Ticket marked as resolved by ${
+            currentUserRef.current?.fullName || "Staff"
+          }.`,
         });
       }
 
       await refreshData();
     },
-    [currentUser, refreshData]
+    [refreshData]
   );
 
   // SUPER ADMIN DATABASE CONTROLS
@@ -1415,22 +1537,28 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
       const { error } = await supabase
         .from("app_settings")
         .update({
-          shop_name: next.shopName,
-          tagline: next.tagline,
+          shop_name: next.shopName.trim(),
+          tagline: next.tagline.trim(),
           currency_code: next.currencyCode,
           currency_symbol: next.currencySymbol,
-          tax_rate: next.taxRate,
-          quotation_validity_days: next.quotationValidityDays,
-          order_prefix: next.orderPrefix,
-          quote_prefix: next.quotePrefix,
-          ticket_prefix: next.ticketPrefix,
-          contact_email: next.contactEmail,
-          contact_phone: next.contactPhone,
-          shop_address: next.shopAddress,
-          business_hours: next.businessHours,
-          payment_instructions: next.paymentInstructions,
+          tax_rate: Math.min(100, Math.max(0, next.taxRate)),
+          quotation_validity_days: Math.min(
+            365,
+            Math.max(1, next.quotationValidityDays)
+          ),
+          order_prefix: next.orderPrefix.trim().toUpperCase(),
+          quote_prefix: next.quotePrefix.trim().toUpperCase(),
+          ticket_prefix: next.ticketPrefix.trim().toUpperCase(),
+          contact_email: next.contactEmail.trim(),
+          contact_phone: next.contactPhone.trim(),
+          shop_address: next.shopAddress.trim(),
+          business_hours: next.businessHours.trim(),
+          payment_instructions: next.paymentInstructions.trim(),
           auto_assign_tickets: next.autoAssignTickets,
-          max_active_chats_per_employee: next.maxActiveChatsPerEmployee,
+          max_active_chats_per_employee: Math.min(
+            50,
+            Math.max(1, next.maxActiveChatsPerEmployee)
+          ),
           updated_at: new Date().toISOString(),
         })
         .eq("id", 1);
@@ -1455,7 +1583,7 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, "-")
           .replace(/(^-|-$)/g, "") ||
-        `product-${makeRandomDigits(4)}`;
+        `product-${makeSecureToken(4).toLowerCase()}`;
 
       const slugCollision = products.some(
         (p) =>
@@ -1463,19 +1591,19 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
           p.slug.toLowerCase() === safeSlug.toLowerCase()
       );
       if (slugCollision) {
-        safeSlug = `${safeSlug}-${makeRandomDigits(4)}`;
+        safeSlug = `${safeSlug}-${makeSecureToken(4).toLowerCase()}`;
       }
 
       const payload = {
         slug: safeSlug,
-        name: product.name,
-        category: product.category,
-        short_description: product.shortDescription,
-        description: product.description,
-        base_unit: product.baseUnit,
-        min_order_qty: product.minOrderQty,
-        lead_time_days: product.leadTimeDays,
-        badge: product.badge ?? null,
+        name: product.name.trim(),
+        category: product.category.trim(),
+        short_description: product.shortDescription.trim(),
+        description: product.description.trim(),
+        base_unit: product.baseUnit.trim(),
+        min_order_qty: Math.max(1, product.minOrderQty),
+        lead_time_days: product.leadTimeDays.trim(),
+        badge: product.badge?.trim() || null,
         featured: product.featured,
         is_active: product.isActive,
         accent_color: product.accentColor,
@@ -1510,12 +1638,14 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
           .insert(
             product.sizes.map((sz, idx) => ({
               product_id: prodId,
-              size_label: sz.sizeLabel,
-              dimensions: sz.dimensions,
-              unit_price: sz.unitPrice,
-              bulk_100_price: sz.bulk100Price ?? null,
-              bulk_500_price: sz.bulk500Price ?? null,
-              setup_fee: sz.setupFee || 0,
+              size_label: sz.sizeLabel.trim(),
+              dimensions: sz.dimensions.trim(),
+              unit_price: Math.max(0, sz.unitPrice),
+              bulk_100_price:
+                sz.bulk100Price != null ? Math.max(0, sz.bulk100Price) : null,
+              bulk_500_price:
+                sz.bulk500Price != null ? Math.max(0, sz.bulk500Price) : null,
+              setup_fee: Math.max(0, sz.setupFee || 0),
               sort_order: idx + 1,
             }))
           )
@@ -1583,7 +1713,13 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
         return { ok: false, error: "Database not connected." };
       }
 
-      // Ephemeral client so signing up a new staff member doesn't replace Super Admin's session
+      if (input.password.length < 8) {
+        return {
+          ok: false,
+          error: "Staff password must be at least 8 characters long.",
+        };
+      }
+
       const tempClient = createClient(url, pubKey, {
         auth: {
           persistSession: false,
@@ -1664,14 +1800,14 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
         .update({ is_online: nextOnline })
         .eq("id", userId);
 
-      if (currentUser?.id === userId) {
+      if (currentUserRef.current?.id === userId) {
         setCurrentUser((prev) =>
           prev ? { ...prev, isOnline: nextOnline } : null
         );
       }
       await refreshData();
     },
-    [currentUser?.id, refreshData, users]
+    [refreshData, users]
   );
 
   const value = useMemo<PrintShopContextValue>(
@@ -1679,6 +1815,7 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
       loading,
       supabaseConnected,
       settings,
+      queueSummary,
       users,
       currentUser,
       products,
@@ -1686,6 +1823,7 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
       orders,
       tickets,
       refreshData,
+      refreshTicketSession,
       formatCurrency,
       calculateProductPrice,
       login,
@@ -1698,6 +1836,7 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
       createOrder,
       updateOrderStatus,
       findByReference,
+      lookupReference,
       openChatTicket,
       claimTicket,
       claimNextQueuedTicket,
@@ -1715,6 +1854,7 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
       loading,
       supabaseConnected,
       settings,
+      queueSummary,
       users,
       currentUser,
       products,
@@ -1722,6 +1862,7 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
       orders,
       tickets,
       refreshData,
+      refreshTicketSession,
       formatCurrency,
       calculateProductPrice,
       login,
@@ -1734,6 +1875,7 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
       createOrder,
       updateOrderStatus,
       findByReference,
+      lookupReference,
       openChatTicket,
       claimTicket,
       claimNextQueuedTicket,
@@ -1759,7 +1901,7 @@ export function PrintShopProvider({ children }: { children: React.ReactNode }) {
 export function usePrintShop() {
   const ctx = useContext(PrintShopContext);
   if (!ctx) {
-    throw new Error("usePrintShop must be used within PrintShopProvider");
+    throw new Error("usePrintShop must be used inside <PrintShopProvider>");
   }
   return ctx;
 }

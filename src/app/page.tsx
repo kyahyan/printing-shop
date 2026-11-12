@@ -4,43 +4,35 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button, Card, Chip } from "@heroui/react";
-import {
-  ArrowRight,
-  CheckCircle2,
-  FileSpreadsheet,
-  Headset,
-  Layers,
-  PackageCheck,
-  Ruler,
-  Search,
-  ShieldCheck,
-  Sparkles,
-} from "lucide-react";
+import { ArrowRight, Search } from "lucide-react";
 import { usePrintShop } from "@/context/PrintShopContext";
 import type { Product } from "@/types/printshop";
 import { ProductPriceModal } from "@/components/ProductPriceModal";
 
-const ACCENT_GRADIENTS: Record<Product["accentColor"], string> = {
-  cyan: "from-cyan-500/20 via-sky-500/10 to-transparent border-cyan-500/30",
-  magenta:
-    "from-pink-500/20 via-fuchsia-500/10 to-transparent border-pink-500/30",
-  amber:
-    "from-amber-500/20 via-orange-500/10 to-transparent border-amber-500/30",
-  indigo:
-    "from-indigo-500/20 via-blue-500/10 to-transparent border-indigo-500/30",
-  emerald:
-    "from-emerald-500/20 via-teal-500/10 to-transparent border-emerald-500/30",
-  rose: "from-rose-500/20 via-red-500/10 to-transparent border-rose-500/30",
-};
-
 export default function HomePage() {
   const router = useRouter();
-  const { settings, products, tickets, formatCurrency } = usePrintShop();
+  const {
+    settings,
+    products,
+    tickets,
+    currentUser,
+    queueSummary,
+    formatCurrency,
+  } = usePrintShop();
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [refQuery, setRefQuery] = useState("");
 
   const activeProducts = products.filter((p) => p.isActive);
-  const queuedTickets = tickets.filter((t) => t.status === "queued").length;
+  const totalSizeTiers = activeProducts.reduce(
+    (acc, p) => acc + p.sizes.length,
+    0
+  );
+
+  const isStaff =
+    currentUser?.role === "employee" || currentUser?.role === "super_admin";
+  const queuedTickets = isStaff
+    ? tickets.filter((t) => t.status === "queued").length
+    : queueSummary.queuedTickets;
 
   const handleTrackSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,141 +42,152 @@ export default function HomePage() {
 
   return (
     <div className="space-y-20">
-      {/* HERO SECTION */}
-      <section className="relative overflow-hidden border-b border-separator bg-gradient-to-b from-surface-secondary/70 via-background to-background py-16 md:py-24">
-        <div className="mx-auto max-w-7xl px-4">
-          <div className="grid items-center gap-10 lg:grid-cols-12">
-            <div className="space-y-6 lg:col-span-7">
-              <div className="inline-flex items-center gap-2 rounded-full border border-separator bg-surface px-3.5 py-1.5 text-xs font-medium text-muted shadow-xs">
-                <Sparkles className="h-3.5 w-3.5 text-accent" />
-                <span>
-                  Transparent Price-Per-Size • Formal Quotations • Live Queue
-                  Support
-                </span>
+      {/* ARCHITECTURAL HERO */}
+      <section className="border-b border-separator bg-surface py-16 md:py-24">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <div className="grid items-start gap-12 lg:grid-cols-12">
+            <div className="space-y-7 lg:col-span-7">
+              <div className="space-y-3">
+                <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted">
+                  Commercial Print & Production Desk
+                </p>
+                <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-5xl sm:leading-[1.1]">
+                  Precision commercial printing priced by exact specification.
+                </h1>
+                <p className="max-w-2xl text-base leading-relaxed text-muted">
+                  {settings.tagline}. Inspect published per-size unit schedules,
+                  volume breaks, and paper substrates, or submit custom project
+                  specifications for a formal quotation.
+                </p>
               </div>
-
-              <h1 className="text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-                Commercial Printing &{" "}
-                <span className="bg-gradient-to-r from-cyan-500 via-blue-600 to-fuchsia-500 bg-clip-text text-transparent">
-                  Instant Quotations
-                </span>{" "}
-                Built Around Your Exact Size.
-              </h1>
-
-              <p className="max-w-2xl text-base leading-relaxed text-muted sm:text-lg">
-                {settings.tagline}. Click any print product to inspect real-time
-                pricing per dimension, volume discounts, and substrate options —
-                or request a tailored quotation with a trackable Reference
-                Number.
-              </p>
 
               <div className="flex flex-wrap items-center gap-3">
                 <Link href="/products">
                   <Button variant="primary" size="lg">
-                    <Ruler className="h-4 w-4" />
-                    Explore Price-Per-Size Catalog
+                    Browse Catalog & Pricing
+                    <ArrowRight className="h-4 w-4" />
                   </Button>
                 </Link>
                 <Link href="/quotations">
                   <Button variant="secondary" size="lg">
-                    <FileSpreadsheet className="h-4 w-4" />
-                    Request Custom Quotation
+                    Request Formal Quotation
                   </Button>
                 </Link>
               </div>
 
-              {/* Quick Reference Lookup Bar */}
-              <form
-                onSubmit={handleTrackSubmit}
-                className="flex max-w-xl flex-col gap-2 rounded-2xl border border-separator bg-surface p-2.5 shadow-sm sm:flex-row sm:items-center"
-              >
-                <div className="flex flex-1 items-center gap-2 px-2">
-                  <Search className="h-4 w-4 shrink-0 text-muted" />
-                  <input
-                    value={refQuery}
-                    onChange={(e) => setRefQuery(e.target.value)}
-                    placeholder={`Enter Reference # (${settings.quotePrefix}-..., ${settings.orderPrefix}-..., or ${settings.ticketPrefix}-...)`}
-                    className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted"
-                  />
-                </div>
-                <Button type="submit" variant="primary" size="sm">
-                  Track Status
-                </Button>
-              </form>
+              {/* Reference Lookup */}
+              <div className="max-w-xl pt-2">
+                <label
+                  htmlFor="hero-ref-input"
+                  className="mb-2 block text-xs font-medium text-muted"
+                >
+                  Track an existing order, quotation, or support ticket
+                </label>
+                <form
+                  onSubmit={handleTrackSubmit}
+                  className="flex flex-col gap-2 sm:flex-row"
+                >
+                  <div className="relative flex-1">
+                    <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                    <input
+                      id="hero-ref-input"
+                      value={refQuery}
+                      onChange={(e) => setRefQuery(e.target.value)}
+                      placeholder={`${settings.orderPrefix}-2026-..., ${settings.quotePrefix}-2026-..., or ${settings.ticketPrefix}-...`}
+                      className="h-10 w-full rounded-lg border border-separator bg-background pl-10 pr-3 font-mono text-sm text-foreground outline-none transition-colors placeholder:font-sans placeholder:text-muted focus:border-accent"
+                    />
+                  </div>
+                  <Button type="submit" variant="secondary" className="h-10">
+                    Look Up Reference
+                  </Button>
+                </form>
+              </div>
             </div>
 
-            {/* Hero Interactive Highlights Card */}
+            {/* Studio Operations Ledger Card */}
             <div className="lg:col-span-5">
-              <Card className="border border-separator bg-surface p-6 shadow-xl space-y-5">
-                <div className="flex items-center justify-between border-b border-separator pb-4">
+              <Card className="border border-separator bg-background p-6 shadow-surface space-y-5">
+                <div className="flex items-start justify-between gap-4 border-b border-separator pb-4">
                   <div>
-                    <div className="text-xs font-semibold uppercase tracking-wider text-accent">
-                      Live Print Floor Overview
-                    </div>
-                    <h2 className="text-lg font-bold text-foreground">
+                    <p className="text-xs font-medium text-muted">
+                      Production & Estimating Status
+                    </p>
+                    <h2 className="mt-0.5 text-base font-semibold text-foreground">
                       {settings.shopName}
                     </h2>
                   </div>
                   <Chip size="sm" color="success" variant="soft">
-                    Presses Online
+                    Operational
                   </Chip>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-xl border border-separator bg-surface-secondary/60 p-3.5">
-                    <div className="text-xs text-muted">Active Catalog</div>
-                    <div className="mt-1 text-2xl font-extrabold text-foreground">
-                      {activeProducts.length} Lines
+                <div className="grid grid-cols-3 divide-x divide-separator rounded-lg border border-separator bg-surface">
+                  <div className="p-3.5">
+                    <div className="text-[11px] text-muted">Catalog Lines</div>
+                    <div className="mt-1 text-xl font-semibold text-foreground tabular-nums">
+                      {activeProducts.length}
                     </div>
-                    <div className="text-[11px] text-emerald-500">
-                      {activeProducts.reduce((acc, p) => acc + p.sizes.length, 0)}{" "}
-                      size tiers ready
+                    <div className="mt-0.5 text-[11px] text-muted tabular-nums">
+                      {totalSizeTiers} size specs
                     </div>
                   </div>
-                  <div className="rounded-xl border border-separator bg-surface-secondary/60 p-3.5">
-                    <div className="text-xs text-muted">Chat Ticket Queue</div>
-                    <div className="mt-1 text-2xl font-extrabold text-foreground">
-                      {queuedTickets} Waiting
+                  <div className="p-3.5">
+                    <div className="text-[11px] text-muted">Specialists</div>
+                    <div className="mt-1 text-xl font-semibold text-foreground tabular-nums">
+                      {queueSummary.onlineSpecialists}
                     </div>
-                    <div className="text-[11px] text-accent">
-                      Live ticket routing
+                    <div className="mt-0.5 text-[11px] text-muted">
+                      On duty
+                    </div>
+                  </div>
+                  <div className="p-3.5">
+                    <div className="text-[11px] text-muted">Support Queue</div>
+                    <div className="mt-1 text-xl font-semibold text-foreground tabular-nums">
+                      {queuedTickets}
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-muted">
+                      Waiting
                     </div>
                   </div>
                 </div>
 
-                <div className="space-y-2.5 text-xs">
-                  <div className="flex items-center gap-2.5 rounded-xl bg-surface-secondary/50 p-3">
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
-                    <span>
-                      <strong>Click any product</strong> to view exact{" "}
-                      <strong>Price Per Size</strong> & bulk 100+ / 500+ breaks
-                    </span>
+                <dl className="space-y-2.5 text-xs">
+                  <div className="flex items-baseline justify-between gap-4 border-b border-separator/70 pb-2">
+                    <dt className="text-muted">Volume Tiers</dt>
+                    <dd className="font-medium text-foreground">
+                      Standard · 100+ Bulk · 500+ Wholesale
+                    </dd>
                   </div>
-                  <div className="flex items-center gap-2.5 rounded-xl bg-surface-secondary/50 p-3">
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-accent" />
-                    <span>
-                      <strong>Reference Number Tracking</strong> for every
-                      Inquiry (<code className="font-mono">QT-...</code>) and
-                      Order (<code className="font-mono">ORD-...</code>)
-                    </span>
+                  <div className="flex items-baseline justify-between gap-4 border-b border-separator/70 pb-2">
+                    <dt className="text-muted">Quotation Validity</dt>
+                    <dd className="font-medium text-foreground tabular-nums">
+                      {settings.quotationValidityDays} calendar days
+                    </dd>
                   </div>
-                  <div className="flex items-center gap-2.5 rounded-xl bg-surface-secondary/50 p-3">
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-amber-500" />
-                    <span>
-                      <strong>Queued Customer Support Chat</strong> — see your
-                      live queue number until a print specialist claims your
-                      ticket
-                    </span>
+                  <div className="flex items-baseline justify-between gap-4 border-b border-separator/70 pb-2">
+                    <dt className="text-muted">Settlement & Tax</dt>
+                    <dd className="font-medium text-foreground tabular-nums">
+                      {settings.currencyCode} ({settings.currencySymbol}) ·{" "}
+                      {settings.taxRate}% VAT
+                    </dd>
                   </div>
-                </div>
+                  <div className="flex items-baseline justify-between gap-4">
+                    <dt className="text-muted">Operating Hours</dt>
+                    <dd className="font-medium text-foreground">
+                      {settings.businessHours}
+                    </dd>
+                  </div>
+                </dl>
 
-                <div className="flex items-center justify-between border-t border-separator pt-3 text-xs text-muted">
-                  <span>Have a Reference Number?</span>
+                <div className="flex items-center justify-between border-t border-separator pt-3 text-xs">
+                  <span className="text-muted">
+                    Need pre-press or substrate guidance?
+                  </span>
                   <Link
-                    href="/track"
-                    className="font-semibold text-accent hover:underline"
+                    href="/chat"
+                    className="font-medium text-accent hover:underline"
                   >
-                    Open Reference Tracker →
+                    Open Support Desk →
                   </Link>
                 </div>
               </Card>
@@ -193,59 +196,60 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* PRODUCTS WITH CLICK-TO-VIEW PRICE PER SIZE */}
-      <section className="mx-auto max-w-7xl px-4 space-y-8">
-        <div className="flex flex-wrap items-end justify-between gap-4">
+      {/* CATALOG SPECIFICATION DIRECTORY */}
+      <section className="mx-auto max-w-7xl px-4 sm:px-6 space-y-8">
+        <div className="flex flex-wrap items-end justify-between gap-4 border-b border-separator pb-5">
           <div>
-            <div className="text-xs font-semibold uppercase tracking-wider text-accent">
-              Transparent Size & Volume Pricing
-            </div>
-            <h2 className="mt-1 text-2xl font-bold text-foreground sm:text-3xl">
-              Click Any Print Product to See Price Per Size
+            <h2 className="text-2xl font-semibold tracking-tight text-foreground">
+              Print Catalog & Size Schedules
             </h2>
             <p className="mt-1 text-sm text-muted">
-              Compare standard dimensions, bulk tiers, substrates, and finishes
-              — then order immediately or request a formal quote.
+              Select any product line to inspect full dimension matrices, bulk
+              unit pricing, paper stocks, and finishing options.
             </p>
           </div>
-          <Link href="/products">
-            <Button variant="secondary">
-              View All {activeProducts.length} Products
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          </Link>
+          {activeProducts.length > 0 && (
+            <Link href="/products">
+              <Button variant="secondary" size="sm">
+                View Full Directory ({activeProducts.length})
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+          )}
         </div>
 
         {activeProducts.length === 0 ? (
-          <Card className="border border-dashed border-separator bg-surface p-12 text-center space-y-4">
-            <Layers className="mx-auto h-10 w-10 text-muted" />
-            <div className="space-y-1">
-              <h3 className="text-lg font-bold text-foreground">
-                No Catalog Products Published Yet
-              </h3>
-              <p className="mx-auto max-w-md text-sm text-muted">
-                Sign in to the Super Admin Dashboard to create your print
-                products and per-size pricing tiers, or request a custom
-                quotation right now.
-              </p>
-            </div>
-            <div className="flex flex-wrap justify-center gap-3">
-              <Link href="/quotations">
-                <Button variant="primary">
-                  <FileSpreadsheet className="h-4 w-4" />
-                  Request Custom Quotation
-                </Button>
-              </Link>
-              <Link href="/admin">
-                <Button variant="secondary">
-                  <ShieldCheck className="h-4 w-4" />
-                  Add Products in Super Admin
-                </Button>
-              </Link>
+          <Card className="border border-separator bg-surface p-10">
+            <div className="flex flex-col items-start justify-between gap-6 md:flex-row md:items-center">
+              <div className="space-y-1.5">
+                <h3 className="text-base font-semibold text-foreground">
+                  No standard catalog schedules published yet
+                </h3>
+                <p className="max-w-xl text-sm text-muted">
+                  Administrators can configure standard print lines and per-size
+                  rate tables in the Administration workspace. Clients may
+                  submit custom specifications directly through the Quotation
+                  Desk.
+                </p>
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-2.5">
+                <Link href="/quotations">
+                  <Button variant="primary">Request Custom Quotation</Button>
+                </Link>
+                {currentUser?.role === "super_admin" ? (
+                  <Link href="/admin">
+                    <Button variant="secondary">Manage Catalog</Button>
+                  </Link>
+                ) : (
+                  <Link href="/staff/login">
+                    <Button variant="secondary">Staff Portal</Button>
+                  </Link>
+                )}
+              </div>
             </div>
           </Card>
         ) : (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {activeProducts.map((product) => {
               const lowestSize = [...product.sizes].sort(
                 (a, b) => a.unitPrice - b.unitPrice
@@ -254,82 +258,82 @@ export default function HomePage() {
                 <Card
                   key={product.id}
                   onClick={() => setSelectedProduct(product)}
-                  className="group cursor-pointer border border-separator bg-surface transition hover:-translate-y-1 hover:border-accent/60 hover:shadow-lg flex flex-col justify-between p-0 overflow-hidden"
+                  className="group cursor-pointer border border-separator bg-surface p-0 transition-colors hover:border-foreground/30 flex flex-col justify-between overflow-hidden"
                 >
                   <div>
-                    <div
-                      className={`border-b bg-gradient-to-br p-5 ${
-                        ACCENT_GRADIENTS[product.accentColor] ||
-                        ACCENT_GRADIENTS.indigo
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <Chip size="sm" color="default" variant="secondary">
+                    <div className="border-b border-separator p-5">
+                      <div className="flex items-center justify-between gap-2 text-xs text-muted">
+                        <span className="font-medium text-foreground/80">
                           {product.category}
-                        </Chip>
+                        </span>
+                        <span>Lead time: {product.leadTimeDays}</span>
+                      </div>
+                      <div className="mt-2.5 flex items-start justify-between gap-2">
+                        <h3 className="text-base font-semibold text-foreground group-hover:text-accent transition-colors">
+                          {product.name}
+                        </h3>
                         {product.badge && (
-                          <Chip size="sm" color="accent" variant="soft">
+                          <span className="shrink-0 rounded bg-surface-secondary px-2 py-0.5 text-[11px] font-medium text-muted">
                             {product.badge}
-                          </Chip>
+                          </span>
                         )}
                       </div>
-                      <h3 className="mt-4 text-lg font-bold text-foreground group-hover:text-accent transition">
-                        {product.name}
-                      </h3>
                       <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-muted">
                         {product.shortDescription}
                       </p>
                     </div>
 
-                    {/* Preview of first 3 sizes right on card */}
-                    <div className="p-5 space-y-2.5">
-                      <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-muted">
-                        <span>Available Sizes ({product.sizes.length})</span>
-                        <span>Price ({product.baseUnit})</span>
+                    <div className="p-5">
+                      <div className="mb-2 flex items-center justify-between text-[11px] font-medium text-muted">
+                        <span>Size ({product.sizes.length})</span>
+                        <span>Rate ({product.baseUnit})</span>
                       </div>
-                      <div className="space-y-1.5">
+                      <div className="divide-y divide-separator rounded-md border border-separator">
                         {product.sizes.slice(0, 3).map((sz) => (
                           <div
                             key={sz.id}
-                            className="flex items-center justify-between rounded-lg bg-surface-secondary/60 px-2.5 py-1.5 text-xs"
+                            className="flex items-center justify-between px-3 py-2 text-xs"
                           >
-                            <span className="truncate font-medium text-foreground pr-2">
-                              {sz.sizeLabel}
-                            </span>
-                            <span className="shrink-0 font-bold text-accent">
+                            <div className="min-w-0 pr-2">
+                              <span className="font-medium text-foreground">
+                                {sz.sizeLabel}
+                              </span>
+                              <span className="ml-1.5 font-mono text-[11px] text-muted">
+                                {sz.dimensions}
+                              </span>
+                            </div>
+                            <span className="shrink-0 font-mono font-medium text-foreground tabular-nums">
                               {formatCurrency(sz.unitPrice)}
                             </span>
                           </div>
                         ))}
-                        {product.sizes.length > 3 && (
-                          <div className="text-center text-[11px] text-muted pt-0.5">
-                            + {product.sizes.length - 3} more sizes & bulk
-                            discounts
-                          </div>
-                        )}
                       </div>
+                      {product.sizes.length > 3 && (
+                        <p className="mt-2 text-[11px] text-muted">
+                          +{product.sizes.length - 3} additional size options &
+                          volume tiers
+                        </p>
+                      )}
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between border-t border-separator bg-surface-secondary/30 px-5 py-3.5">
-                    <div>
-                      <div className="text-[10px] uppercase tracking-wider text-muted">
-                        Starts at
-                      </div>
-                      <div className="text-base font-extrabold text-foreground">
-                        {lowestSize ? formatCurrency(lowestSize.unitPrice) : "—"}{" "}
-                        <span className="text-xs font-normal text-muted">
-                          {product.baseUnit}
-                        </span>
-                      </div>
+                  <div className="flex items-center justify-between border-t border-separator bg-surface-secondary/40 px-5 py-3.5">
+                    <div className="tabular-nums">
+                      <span className="text-[11px] text-muted">From </span>
+                      <span className="font-mono text-sm font-semibold text-foreground">
+                        {lowestSize ? formatCurrency(lowestSize.unitPrice) : "—"}
+                      </span>
+                      <span className="text-[11px] text-muted">
+                        {" "}
+                        {product.baseUnit}
+                      </span>
                     </div>
                     <Button
                       size="sm"
-                      variant="primary"
+                      variant="secondary"
                       onPress={() => setSelectedProduct(product)}
                     >
-                      <Ruler className="h-3.5 w-3.5" />
-                      See Price Per Size
+                      Configure & Price
                     </Button>
                   </div>
                 </Card>
@@ -339,112 +343,104 @@ export default function HomePage() {
         )}
       </section>
 
-      {/* WORKFLOW PILLARS */}
-      <section className="mx-auto max-w-7xl px-4">
-        <div className="grid gap-6 rounded-3xl border border-separator bg-surface p-8 md:grid-cols-4">
-          <div className="space-y-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/12 text-accent">
-              <Layers className="h-5 w-5" />
-            </div>
-            <h3 className="font-bold text-foreground">
-              1. Pick Size & Specs
-            </h3>
-            <p className="text-xs leading-relaxed text-muted">
-              Click any print line to compare standard sizes, 100+ and 500+
-              volume rates, paper GSM, and lamination.
-            </p>
+      {/* PRODUCTION PROCESS */}
+      <section className="mx-auto max-w-7xl px-4 sm:px-6">
+        <div className="overflow-hidden rounded-xl border border-separator bg-surface">
+          <div className="border-b border-separator px-6 py-4">
+            <h2 className="text-sm font-semibold text-foreground">
+              Standard Production & Estimating Workflow
+            </h2>
           </div>
-
-          <div className="space-y-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/12 text-amber-500">
-              <FileSpreadsheet className="h-5 w-5" />
+          <div className="grid divide-y divide-separator md:grid-cols-4 md:divide-x md:divide-y-0">
+            <div className="p-6 space-y-2">
+              <div className="font-mono text-xs font-medium text-muted">01</div>
+              <h3 className="text-sm font-semibold text-foreground">
+                Specification & Sizing
+              </h3>
+              <p className="text-xs leading-relaxed text-muted">
+                Select standard dimensions, paper GSM substrates, and lamination
+                schedules, or define custom trim dimensions.
+              </p>
             </div>
-            <h3 className="font-bold text-foreground">
-              2. Quote or Direct Order
-            </h3>
-            <p className="text-xs leading-relaxed text-muted">
-              Need custom dimensions or multi-SKU splits? Request a formal
-              quotation (<code className="font-mono">QT-...</code>) or place an
-              order right away.
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/12 text-emerald-500">
-              <Headset className="h-5 w-5" />
+            <div className="p-6 space-y-2">
+              <div className="font-mono text-xs font-medium text-muted">02</div>
+              <h3 className="text-sm font-semibold text-foreground">
+                Direct Order or Formal Quote
+              </h3>
+              <p className="text-xs leading-relaxed text-muted">
+                Place standard runs directly with server-verified pricing or
+                request an estimator-reviewed quotation (
+                <code className="font-mono text-foreground">QT-...</code>).
+              </p>
             </div>
-            <h3 className="font-bold text-foreground">
-              3. Queued Support Chat
-            </h3>
-            <p className="text-xs leading-relaxed text-muted">
-              Join our live ticket queue to verify artwork bleeds, negotiate
-              rush schedules, and talk directly with our estimators.
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-fuchsia-500/12 text-fuchsia-500">
-              <PackageCheck className="h-5 w-5" />
+            <div className="p-6 space-y-2">
+              <div className="font-mono text-xs font-medium text-muted">03</div>
+              <h3 className="text-sm font-semibold text-foreground">
+                Pre-Press & Support Queue
+              </h3>
+              <p className="text-xs leading-relaxed text-muted">
+                Consult directly with a pre-press specialist in our live ticket
+                queue to verify bleed tolerances, dielines, and schedules.
+              </p>
             </div>
-            <h3 className="font-bold text-foreground">
-              4. Track Reference #
-            </h3>
-            <p className="text-xs leading-relaxed text-muted">
-              Follow your job from Pre-Press Check to Printing, Finishing, and
-              Ready for Pickup using your Reference Number or Account.
-            </p>
+            <div className="p-6 space-y-2">
+              <div className="font-mono text-xs font-medium text-muted">04</div>
+              <h3 className="text-sm font-semibold text-foreground">
+                Tracked Production
+              </h3>
+              <p className="text-xs leading-relaxed text-muted">
+                Monitor job progress across Pre-Press, Printing, Finishing,
+                Quality Control, and Dispatch using your Reference Number.
+              </p>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* ROLE PORTALS BANNER */}
-      <section className="mx-auto max-w-7xl px-4">
+      {/* PORTAL ACCESS */}
+      <section className="mx-auto max-w-7xl px-4 sm:px-6">
         <div className="grid gap-6 md:grid-cols-2">
-          <Card className="border border-separator bg-surface p-6 flex flex-col justify-between gap-4">
+          <Card className="border border-separator bg-surface p-6 flex flex-col justify-between gap-5">
             <div className="space-y-2">
-              <Chip size="sm" color="accent" variant="soft">
-                Customer Accounts
-              </Chip>
-              <h3 className="text-xl font-bold text-foreground">
-                Manage Repeat Print Runs & Approved Quotes
+              <p className="text-xs font-medium uppercase tracking-wider text-muted">
+                Client Accounts
+              </p>
+              <h3 className="text-lg font-semibold text-foreground">
+                Centralize Repeat Print Runs & Quotations
               </h3>
-              <p className="text-sm text-muted">
-                Create a free customer account to save all your Quotation
-                References, convert approved quotes into production orders in
-                one click, and keep your chat ticket history.
+              <p className="text-sm leading-relaxed text-muted">
+                Register a client account to maintain an archive of your
+                quotations, convert approved estimates into production orders,
+                and access active support tickets.
               </p>
             </div>
             <div>
               <Link href="/account">
                 <Button variant="primary">
-                  Create / Open Customer Account
+                  Access Client Portal
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
             </div>
           </Card>
 
-          <Card className="border border-separator bg-surface p-6 flex flex-col justify-between gap-4">
+          <Card className="border border-separator bg-surface p-6 flex flex-col justify-between gap-5">
             <div className="space-y-2">
-              <Chip size="sm" color="warning" variant="soft">
-                Staff & Super Admin Portals
-              </Chip>
-              <h3 className="text-xl font-bold text-foreground">
-                Employee Order Desk, Chat Queue & Super Admin Pricing
+              <p className="text-xs font-medium uppercase tracking-wider text-muted">
+                Internal Operations
+              </p>
+              <h3 className="text-lg font-semibold text-foreground">
+                Operations Desk & System Administration
               </h3>
-              <p className="text-sm text-muted">
-                Employees respond to inquiries, take walk-in counter orders with
-                reference slips, and claim queued chat tickets. Super Admins
-                manage products, per-size pricing, staff roles, and shop
-                settings.
+              <p className="text-sm leading-relaxed text-muted">
+                Authorized staff issue quotations, log walk-in counter orders,
+                update press stages, and service queued tickets. Super Admins
+                manage catalog pricing and personnel access.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div>
               <Link href="/staff/login">
-                <Button variant="secondary">
-                  <ShieldCheck className="h-4 w-4" />
-                  Open Staff Login Portal
-                </Button>
+                <Button variant="secondary">Sign In to Staff Portal</Button>
               </Link>
             </div>
           </Card>

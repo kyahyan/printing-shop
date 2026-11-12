@@ -34,3 +34,4 @@ Update the relevant note(s) in `C:\Users\yanco\Documents\Obsidian Vault` wheneve
 - Include clean YAML frontmatter (`title`, `tags`, `updated`, `project`).
 - Connect related notes with Obsidian `[[wikilinks]]` so the Obsidian Graph View stays interconnected.
 - **Security Rule**: Never write raw secret keys, `.env.local` tokens, or plaintext passwords into Obsidian notes. Reference environment variable names (e.g., `NEXT_PUBLIC_SUPABASE_URL`) instead.
+

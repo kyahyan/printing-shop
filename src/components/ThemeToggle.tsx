@@ -15,8 +15,13 @@ export function ThemeToggle() {
 
   if (!mounted) {
     return (
-      <Button variant="secondary" size="sm" isIconOnly aria-label="Toggle theme">
-        <Sun className="h-4 w-4 opacity-50" />
+      <Button
+        variant="ghost"
+        size="sm"
+        isIconOnly
+        aria-label="Toggle color mode"
+      >
+        <Sun className="h-4 w-4 text-muted" />
       </Button>
     );
   }
@@ -25,18 +30,17 @@ export function ThemeToggle() {
 
   return (
     <Button
-      variant="secondary"
+      variant="ghost"
       size="sm"
       isIconOnly
       aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
       onPress={() => setTheme(isDark ? "light" : "dark")}
     >
       {isDark ? (
-        <Sun className="h-4 w-4 text-amber-400" />
+        <Sun className="h-4 w-4 text-foreground" />
       ) : (
-        <Moon className="h-4 w-4 text-indigo-600" />
+        <Moon className="h-4 w-4 text-foreground" />
       )}
     </Button>
   );
 }
-

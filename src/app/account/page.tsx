@@ -4,19 +4,7 @@ import React, { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button, Card, Chip, Tabs } from "@heroui/react";
-import {
-  Briefcase,
-  CheckCircle2,
-  FileSpreadsheet,
-  LogOut,
-  MessageSquare,
-  Package,
-  ShieldAlert,
-  ShieldCheck,
-  ShoppingBag,
-  UserCheck,
-  UserPlus,
-} from "lucide-react";
+import { AlertCircle, CheckCircle2, LogOut } from "lucide-react";
 import { usePrintShop } from "@/context/PrintShopContext";
 
 function CustomerAccountContent() {
@@ -44,10 +32,10 @@ function CustomerAccountContent() {
   const [companyName, setCompanyName] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(
     errorParam === "staff_only" || errorParam === "unauthorized"
-      ? "That route is restricted to Print Shop Employees and Super Administrators."
+      ? "That workspace is restricted to authorized staff and administrators."
       : errorParam === "invalid_or_expired_link"
-      ? "The confirmation link was invalid or expired. Please sign in or request a new link."
-      : null
+        ? "The verification link is invalid or expired. Please sign in or request a new link."
+        : null
   );
   const [confirmEmailNotice, setConfirmEmailNotice] = useState<string | null>(
     null
@@ -114,7 +102,7 @@ function CustomerAccountContent() {
     }
     if (res.needsEmailConfirmation) {
       setConfirmEmailNotice(
-        `Account created for ${email}! Please check your email inbox to confirm your address, then sign in.`
+        `Account registered for ${email}. Please verify your email inbox before signing in.`
       );
       setAuthTab("signin");
       return;
@@ -122,34 +110,47 @@ function CustomerAccountContent() {
     router.refresh();
   };
 
+  const handleApproveQuote = async (referenceNumber: string) => {
+    setErrorMsg(null);
+    try {
+      await convertQuotationToOrder(referenceNumber);
+    } catch (err) {
+      setErrorMsg(
+        err instanceof Error
+          ? err.message
+          : "Unable to convert quotation to order."
+      );
+    }
+  };
+
   if (!currentUser) {
     return (
-      <div className="mx-auto max-w-md px-4 py-12 space-y-6">
-        <div className="text-center space-y-2">
-          <Chip size="sm" color="accent" variant="soft">
-            Supabase Auth Portal
-          </Chip>
-          <h1 className="text-2xl font-extrabold text-foreground">
-            Sign In or Create a Customer Account
+      <div className="mx-auto max-w-md px-4 py-14 space-y-6">
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted">
+            Client Portal
+          </p>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            Sign in or register an account
           </h1>
-          <p className="text-xs text-muted">
-            Track your print orders, approve custom quotations, and keep all
-            Reference Numbers in one place.
+          <p className="text-xs leading-relaxed text-muted">
+            Access your production orders, approve formal quotations, and review
+            support ticket threads.
           </p>
         </div>
 
         <Card className="border border-separator bg-surface p-6 space-y-5">
-          <div className="flex rounded-xl bg-surface-secondary p-1">
+          <div className="grid grid-cols-2 gap-1 rounded-lg border border-separator bg-surface-secondary p-1">
             <button
               type="button"
               onClick={() => {
                 setAuthTab("signin");
                 setErrorMsg(null);
               }}
-              className={`flex-1 rounded-lg py-2 text-xs font-semibold transition ${
+              className={`rounded-md py-1.5 text-xs font-medium transition-colors ${
                 authTab === "signin"
-                  ? "bg-surface text-foreground shadow-xs"
-                  : "text-muted"
+                  ? "bg-surface text-foreground shadow-2xs"
+                  : "text-muted hover:text-foreground"
               }`}
             >
               Sign In
@@ -163,26 +164,26 @@ function CustomerAccountContent() {
                 setErrorMsg(null);
                 setConfirmEmailNotice(null);
               }}
-              className={`flex-1 rounded-lg py-2 text-xs font-semibold transition ${
+              className={`rounded-md py-1.5 text-xs font-medium transition-colors ${
                 authTab === "register"
-                  ? "bg-surface text-foreground shadow-xs"
-                  : "text-muted"
+                  ? "bg-surface text-foreground shadow-2xs"
+                  : "text-muted hover:text-foreground"
               }`}
             >
-              Create Account
+              Register
             </button>
           </div>
 
           {confirmEmailNotice && (
-            <div className="flex items-start gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3 text-xs text-emerald-600 dark:text-emerald-400">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+            <div className="flex items-start gap-2 rounded-lg border border-separator bg-surface-secondary p-3 text-xs text-foreground">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
               <span>{confirmEmailNotice}</span>
             </div>
           )}
 
           {errorMsg && (
-            <div className="flex items-start gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-500">
-              <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+            <div className="flex items-start gap-2 rounded-lg border border-danger/30 bg-danger/10 p-3 text-xs text-danger">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               <span>{errorMsg}</span>
             </div>
           )}
@@ -190,29 +191,31 @@ function CustomerAccountContent() {
           {authTab === "signin" ? (
             <form onSubmit={handleSignIn} className="space-y-4">
               <div>
-                <label className="mb-1 block text-xs font-semibold text-foreground">
+                <label className="mb-1 block text-xs font-medium text-foreground">
                   Email Address
                 </label>
                 <input
                   required
                   type="email"
+                  autoComplete="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@company.com"
-                  className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3.5 py-2.5 text-sm text-foreground outline-none focus:border-accent"
+                  placeholder="name@company.com"
+                  className="h-10 w-full rounded-lg border border-separator bg-background px-3.5 text-sm text-foreground outline-none focus:border-accent"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold text-foreground">
+                <label className="mb-1 block text-xs font-medium text-foreground">
                   Password
                 </label>
                 <input
                   required
                   type="password"
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3.5 py-2.5 text-sm text-foreground outline-none focus:border-accent"
+                  className="h-10 w-full rounded-lg border border-separator bg-background px-3.5 text-sm text-foreground outline-none focus:border-accent"
                 />
               </div>
               <Button
@@ -221,72 +224,76 @@ function CustomerAccountContent() {
                 fullWidth
                 isDisabled={submitting}
               >
-                <UserCheck className="h-4 w-4" />
-                {submitting ? "Signing In..." : "Sign In to Account"}
+                {submitting ? "Signing In..." : "Sign In"}
               </Button>
             </form>
           ) : (
             <form onSubmit={handleRegister} className="space-y-3.5">
               <div>
-                <label className="mb-1 block text-xs font-semibold text-foreground">
+                <label className="mb-1 block text-xs font-medium text-foreground">
                   Full Name *
                 </label>
                 <input
                   required
+                  autoComplete="name"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Sofia Mendoza"
-                  className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3.5 py-2 text-sm text-foreground outline-none focus:border-accent"
+                  placeholder="Full name"
+                  className="h-10 w-full rounded-lg border border-separator bg-background px-3.5 text-sm text-foreground outline-none focus:border-accent"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold text-foreground">
-                  Company / Brand (Optional)
+                <label className="mb-1 block text-xs font-medium text-foreground">
+                  Company / Organization (Optional)
                 </label>
                 <input
+                  autoComplete="organization"
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
-                  placeholder="Studio Solace"
-                  className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3.5 py-2 text-sm text-foreground outline-none focus:border-accent"
+                  placeholder="Company name"
+                  className="h-10 w-full rounded-lg border border-separator bg-background px-3.5 text-sm text-foreground outline-none focus:border-accent"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold text-foreground">
+                <label className="mb-1 block text-xs font-medium text-foreground">
                   Email Address *
                 </label>
                 <input
                   required
                   type="email"
+                  autoComplete="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="sofia@studiosolace.ph"
-                  className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3.5 py-2 text-sm text-foreground outline-none focus:border-accent"
+                  placeholder="name@company.com"
+                  className="h-10 w-full rounded-lg border border-separator bg-background px-3.5 text-sm text-foreground outline-none focus:border-accent"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold text-foreground">
-                  Mobile Number *
+                <label className="mb-1 block text-xs font-medium text-foreground">
+                  Telephone / Mobile *
                 </label>
                 <input
                   required
+                  autoComplete="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+63 917 888 1234"
-                  className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3.5 py-2 text-sm text-foreground outline-none focus:border-accent"
+                  placeholder="+63 917 000 0000"
+                  className="h-10 w-full rounded-lg border border-separator bg-background px-3.5 text-sm text-foreground outline-none focus:border-accent"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold text-foreground">
+                <label className="mb-1 block text-xs font-medium text-foreground">
                   Password *
                 </label>
                 <input
                   required
                   type="password"
-                  minLength={6}
+                  autoComplete="new-password"
+                  minLength={8}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="At least 6 characters"
-                  className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3.5 py-2 text-sm text-foreground outline-none focus:border-accent"
+                  placeholder="Minimum 8 characters"
+                  className="h-10 w-full rounded-lg border border-separator bg-background px-3.5 text-sm text-foreground outline-none focus:border-accent"
                 />
               </div>
               <Button
@@ -295,8 +302,7 @@ function CustomerAccountContent() {
                 fullWidth
                 isDisabled={submitting}
               >
-                <UserPlus className="h-4 w-4" />
-                {submitting ? "Creating Account..." : "Create Customer Account"}
+                {submitting ? "Registering..." : "Create Client Account"}
               </Button>
             </form>
           )}
@@ -306,10 +312,10 @@ function CustomerAccountContent() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 space-y-8">
+    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 space-y-8">
       {errorMsg && (
-        <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-600 dark:text-amber-400">
-          <ShieldAlert className="h-4 w-4 shrink-0" />
+        <div className="flex items-center gap-2 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-xs text-danger">
+          <AlertCircle className="h-4 w-4 shrink-0" />
           <span>{errorMsg}</span>
         </div>
       )}
@@ -317,17 +323,18 @@ function CustomerAccountContent() {
       {/* Profile Header */}
       <Card className="border border-separator bg-surface p-6 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-extrabold text-foreground">
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">
               {currentUser.fullName}
             </h1>
-            <Chip size="sm" color="accent" variant="soft">
-              {currentUser.role.replace("_", " ").toUpperCase()}
+            <Chip size="sm" color="default" variant="secondary">
+              {currentUser.role.replace("_", " ")}
             </Chip>
           </div>
           <p className="mt-1 text-xs text-muted">
-            {currentUser.email} • {currentUser.phone || "No phone saved"}
-            {currentUser.companyName ? ` • ${currentUser.companyName}` : ""}
+            {currentUser.email}
+            {currentUser.phone ? ` · ${currentUser.phone}` : ""}
+            {currentUser.companyName ? ` · ${currentUser.companyName}` : ""}
           </p>
         </div>
 
@@ -336,29 +343,25 @@ function CustomerAccountContent() {
             currentUser.role === "super_admin") && (
             <Link href="/dashboard">
               <Button size="sm" variant="secondary">
-                <Briefcase className="h-4 w-4" />
-                Employee Desk
+                Operations Desk
               </Button>
             </Link>
           )}
           {currentUser.role === "super_admin" && (
             <Link href="/admin">
               <Button size="sm" variant="secondary">
-                <ShieldCheck className="h-4 w-4" />
-                Super Admin
+                Administration
               </Button>
             </Link>
           )}
           <Link href="/products">
             <Button size="sm" variant="primary">
-              <ShoppingBag className="h-4 w-4" />
-              New Print Order
+              Browse Catalog
             </Button>
           </Link>
           <Link href="/quotations">
             <Button size="sm" variant="secondary">
-              <FileSpreadsheet className="h-4 w-4" />
-              New Quotation
+              Request Quote
             </Button>
           </Link>
           <Button
@@ -375,16 +378,16 @@ function CustomerAccountContent() {
         </div>
       </Card>
 
-      {/* HeroUI v3 Compound Tabs */}
+      {/* Account Sections */}
       <Tabs defaultSelectedKey="orders" className="space-y-4">
         <Tabs.ListContainer>
-          <Tabs.List aria-label="Customer account sections">
+          <Tabs.List aria-label="Client account records">
             <Tabs.Tab id="orders">
               Orders ({myOrders.length})
               <Tabs.Indicator />
             </Tabs.Tab>
             <Tabs.Tab id="quotes">
-              Quotations & Inquiries ({myQuotes.length})
+              Quotations ({myQuotes.length})
               <Tabs.Indicator />
             </Tabs.Tab>
             <Tabs.Tab id="tickets">
@@ -395,30 +398,30 @@ function CustomerAccountContent() {
         </Tabs.ListContainer>
 
         {/* ORDERS PANEL */}
-        <Tabs.Panel id="orders" className="space-y-4">
+        <Tabs.Panel id="orders" className="space-y-3">
           {myOrders.length === 0 ? (
             <Card className="border border-separator bg-surface p-10 text-center text-sm text-muted">
-              You have no orders yet. Browse our Price-Per-Size catalog to start
-              an order!
+              No production orders recorded under this account.
             </Card>
           ) : (
             myOrders.map((ord) => (
               <Card
                 key={ord.id}
-                className="border border-separator bg-surface p-5 flex flex-wrap items-center justify-between gap-4"
+                className="border border-separator bg-surface p-5 flex flex-wrap items-center justify-between gap-4 tabular-nums"
               >
                 <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <Package className="h-4 w-4 text-accent" />
-                    <span className="font-mono text-base font-bold text-accent">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-sm font-semibold text-foreground">
                       {ord.referenceNumber}
                     </span>
                     <Chip size="sm" color="success" variant="soft">
-                      {ord.productionStatus.replace(/_/g, " ").toUpperCase()}
+                      {ord.productionStatus.replace(/_/g, " ")}
                     </Chip>
                     <Chip
                       size="sm"
-                      color={ord.paymentStatus === "paid" ? "accent" : "warning"}
+                      color={
+                        ord.paymentStatus === "paid" ? "default" : "warning"
+                      }
                       variant="soft"
                     >
                       {ord.paymentStatus.replace(/_/g, " ")}
@@ -430,20 +433,22 @@ function CustomerAccountContent() {
                         (i) =>
                           `${i.quantity}× ${i.productName} (${i.sizeLabel})`
                       )
-                      .join(" • ")}
+                      .join(" · ")}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-4">
                   <div className="text-right">
-                    <div className="text-xs text-muted">Total</div>
-                    <div className="font-extrabold text-foreground">
+                    <div className="text-[11px] text-muted">Total</div>
+                    <div className="font-mono text-sm font-semibold text-foreground">
                       {formatCurrency(ord.totalAmount)}
                     </div>
                   </div>
-                  <Link href={`/track?ref=${ord.referenceNumber}`}>
+                  <Link
+                    href={`/track?ref=${encodeURIComponent(ord.referenceNumber)}`}
+                  >
                     <Button size="sm" variant="secondary">
-                      Track Job
+                      View Details
                     </Button>
                   </Link>
                 </div>
@@ -453,20 +458,20 @@ function CustomerAccountContent() {
         </Tabs.Panel>
 
         {/* QUOTATIONS PANEL */}
-        <Tabs.Panel id="quotes" className="space-y-4">
+        <Tabs.Panel id="quotes" className="space-y-3">
           {myQuotes.length === 0 ? (
             <Card className="border border-separator bg-surface p-10 text-center text-sm text-muted">
-              No quotations submitted under your account yet.
+              No quotation inquiries submitted under this account.
             </Card>
           ) : (
             myQuotes.map((q) => (
               <Card
                 key={q.id}
-                className="border border-separator bg-surface p-5 flex flex-wrap items-center justify-between gap-4"
+                className="border border-separator bg-surface p-5 flex flex-wrap items-center justify-between gap-4 tabular-nums"
               >
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-base font-bold text-accent">
+                    <span className="font-mono text-sm font-semibold text-foreground">
                       {q.referenceNumber}
                     </span>
                     <Chip
@@ -475,28 +480,28 @@ function CustomerAccountContent() {
                         q.status === "quoted"
                           ? "success"
                           : q.status === "converted_to_order"
-                          ? "accent"
-                          : "warning"
+                            ? "accent"
+                            : "warning"
                       }
                       variant="soft"
                     >
-                      {q.status.replace(/_/g, " ").toUpperCase()}
+                      {q.status.replace(/_/g, " ")}
                     </Chip>
                   </div>
-                  <div className="text-sm font-semibold text-foreground">
+                  <div className="text-sm font-medium text-foreground">
                     {q.subject}
                   </div>
                   <div className="text-xs text-muted">
-                    {q.productName} • {q.selectedSize} • Qty:{" "}
-                    {q.quantity.toLocaleString()}
+                    {q.productName} · {q.selectedSize} ·{" "}
+                    {q.quantity.toLocaleString()} units
                   </div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
                   {q.quotedTotal != null && (
                     <div className="text-right">
-                      <div className="text-[11px] text-muted">Quoted Total</div>
-                      <div className="text-base font-extrabold text-accent">
+                      <div className="text-[11px] text-muted">Quoted Net</div>
+                      <div className="font-mono text-sm font-semibold text-foreground">
                         {formatCurrency(q.quotedTotal)}
                       </div>
                     </div>
@@ -505,14 +510,16 @@ function CustomerAccountContent() {
                     <Button
                       size="sm"
                       variant="primary"
-                      onPress={() => convertQuotationToOrder(q.id)}
+                      onPress={() => handleApproveQuote(q.referenceNumber)}
                     >
                       Approve & Order
                     </Button>
                   )}
-                  <Link href={`/track?ref=${q.referenceNumber}`}>
+                  <Link
+                    href={`/track?ref=${encodeURIComponent(q.referenceNumber)}`}
+                  >
                     <Button size="sm" variant="secondary">
-                      Details
+                      Inspect
                     </Button>
                   </Link>
                 </div>
@@ -522,10 +529,10 @@ function CustomerAccountContent() {
         </Tabs.Panel>
 
         {/* TICKETS PANEL */}
-        <Tabs.Panel id="tickets" className="space-y-4">
+        <Tabs.Panel id="tickets" className="space-y-3">
           {myTickets.length === 0 ? (
             <Card className="border border-separator bg-surface p-10 text-center text-sm text-muted">
-              No support chat tickets yet.
+              No support tickets recorded under this account.
             </Card>
           ) : (
             myTickets.map((t) => (
@@ -535,7 +542,7 @@ function CustomerAccountContent() {
               >
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-mono font-bold text-accent">
+                    <span className="font-mono text-sm font-semibold text-foreground">
                       {t.ticketNumber}
                     </span>
                     <Chip
@@ -544,22 +551,21 @@ function CustomerAccountContent() {
                         t.status === "active"
                           ? "success"
                           : t.status === "queued"
-                          ? "warning"
-                          : "default"
+                            ? "warning"
+                            : "default"
                       }
                       variant="soft"
                     >
-                      {t.status.toUpperCase()}
+                      {t.status}
                     </Chip>
                   </div>
-                  <div className="mt-1 text-sm font-semibold text-foreground">
+                  <div className="mt-1 text-sm font-medium text-foreground">
                     {t.topic}
                   </div>
                 </div>
-                <Link href={`/chat?ticket=${t.id}`}>
+                <Link href={`/chat?ticket=${encodeURIComponent(t.id)}`}>
                   <Button size="sm" variant="secondary">
-                    <MessageSquare className="h-4 w-4" />
-                    Open Chat
+                    Open Thread
                   </Button>
                 </Link>
               </Card>
@@ -576,7 +582,7 @@ export default function CustomerAccountPage() {
     <Suspense
       fallback={
         <div className="mx-auto max-w-md px-4 py-20 text-center text-sm text-muted">
-          Loading Account Portal...
+          Loading Client Portal...
         </div>
       }
     >

@@ -4,6 +4,7 @@ import {
   getSupabasePublicKey,
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
+import { sanitizeSafeNextPath } from "@/lib/security";
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -38,10 +39,6 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  // Verify JWT locally/refresh session via asymmetric JWKS (Supabase SSR best practice)
-  const { data: claimsData } = await supabase.auth.getClaims();
-  const userId = claimsData?.claims?.sub;
-
   const { pathname } = request.nextUrl;
 
   const isEmployeeRoute =
@@ -49,10 +46,10 @@ export async function proxy(request: NextRequest) {
   const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
   const isStaffLoginRoute = pathname === "/staff/login";
 
-  // Helper to copy refreshed auth cookies onto any redirect response
   const redirectWithCookies = (targetPath: string) => {
+    const safeTarget = sanitizeSafeNextPath(targetPath, "/");
     const url = request.nextUrl.clone();
-    const [destPathname, query] = targetPath.split("?");
+    const [destPathname, query] = safeTarget.split("?");
     url.pathname = destPathname;
     url.search = query ? `?${query}` : "";
     const redirectRes = NextResponse.redirect(url);
@@ -62,24 +59,30 @@ export async function proxy(request: NextRequest) {
     return redirectRes;
   };
 
-  if (isEmployeeRoute || isAdminRoute) {
-    if (!userId) {
-      return redirectWithCookies(
-        `/staff/login?next=${encodeURIComponent(pathname)}`
-      );
-    }
+  if (isEmployeeRoute || isAdminRoute || isStaffLoginRoute) {
+    // Authoritative server-side user verification for protected staff routes
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role, is_active")
-      .eq("id", userId)
-      .maybeSingle();
+    if (isEmployeeRoute || isAdminRoute) {
+      if (!user) {
+        return redirectWithCookies(
+          `/staff/login?next=${encodeURIComponent(pathname)}`
+        );
+      }
 
-    // If profile exists and user is deactivated or unauthorized, enforce RBAC
-    if (profile) {
-      if (!profile.is_active) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role, is_active")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      // Fail closed if profile row is missing or deactivated
+      if (!profile || !profile.is_active) {
         return redirectWithCookies("/staff/login?error=account_disabled");
       }
+
       if (isAdminRoute && profile.role !== "super_admin") {
         return redirectWithCookies(
           profile.role === "employee"
@@ -87,6 +90,7 @@ export async function proxy(request: NextRequest) {
             : "/account?error=unauthorized"
         );
       }
+
       if (
         isEmployeeRoute &&
         profile.role !== "employee" &&
@@ -95,24 +99,26 @@ export async function proxy(request: NextRequest) {
         return redirectWithCookies("/account?error=staff_only");
       }
     }
-  }
 
-  // Redirect already-authenticated staff away from /staff/login
-  if (isStaffLoginRoute && userId) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role, is_active")
-      .eq("id", userId)
-      .maybeSingle();
+    if (isStaffLoginRoute && user) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role, is_active")
+        .eq("id", user.id)
+        .maybeSingle();
 
-    if (profile?.is_active) {
-      if (profile.role === "super_admin") {
-        return redirectWithCookies("/admin");
-      }
-      if (profile.role === "employee") {
-        return redirectWithCookies("/dashboard");
+      if (profile?.is_active) {
+        if (profile.role === "super_admin") {
+          return redirectWithCookies("/admin");
+        }
+        if (profile.role === "employee") {
+          return redirectWithCookies("/dashboard");
+        }
       }
     }
+  } else {
+    // Refresh session cookies on public/customer routes without extra DB round-trip
+    await supabase.auth.getClaims();
   }
 
   return supabaseResponse;

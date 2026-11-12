@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { sanitizeSafeNextPath } from "@/lib/security";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const rawNext = searchParams.get("next") ?? "/account";
-  // Prevent open-redirect: allow only single-slash relative paths
-  const next =
-    rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/account";
+  const next = sanitizeSafeNextPath(searchParams.get("next"), "/account");
 
   if (code) {
     const supabase = await getSupabaseServerClient();
@@ -19,6 +17,5 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.redirect(`${origin}/account?error=auth_callback_failed`);
+  return NextResponse.redirect(`${origin}/account?error=invalid_or_expired_link`);
 }
-

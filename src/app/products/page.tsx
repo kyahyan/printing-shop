@@ -2,21 +2,14 @@
 
 import React, { useMemo, useState } from "react";
 import Link from "next/link";
-import { Button, Card, Chip } from "@heroui/react";
-import {
-  Clock,
-  FileSpreadsheet,
-  Filter,
-  Ruler,
-  Search,
-  SlidersHorizontal,
-} from "lucide-react";
+import { Button, Card } from "@heroui/react";
+import { Search } from "lucide-react";
 import { usePrintShop } from "@/context/PrintShopContext";
 import type { Product } from "@/types/printshop";
 import { ProductPriceModal } from "@/components/ProductPriceModal";
 
 export default function ProductsPage() {
-  const { products, formatCurrency } = usePrintShop();
+  const { products, currentUser, formatCurrency } = usePrintShop();
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -51,94 +44,102 @@ export default function ProductsPage() {
   }, [activeProducts, search, selectedCategory]);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 space-y-8">
+    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 space-y-8">
       {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-4 border-b border-separator pb-6">
         <div>
-          <Chip size="sm" color="accent" variant="soft">
-            Interactive Print Catalog
-          </Chip>
-          <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-foreground">
-            Products & Price-Per-Size Directory
+          <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted">
+            Standard Specifications
+          </p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+            Catalog & Per-Size Rate Schedules
           </h1>
-          <p className="mt-1 text-sm text-muted">
-            Select any product below to inspect its complete size matrix, bulk
-            quantity breaks, paper stocks, and instant order/quotation options.
+          <p className="mt-1.5 max-w-2xl text-sm text-muted">
+            Select any print line to calculate volume pricing across dimensions,
+            paper substrates, and finishing options, or request a bespoke
+            quotation.
           </p>
         </div>
         <Link href="/quotations">
-          <Button variant="primary">
-            <FileSpreadsheet className="h-4 w-4" />
-            Need a Custom Non-Standard Size? Get a Quote
-          </Button>
+          <Button variant="primary">Request Custom Specification Quote</Button>
         </Link>
       </div>
 
       {/* Filters & Search */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Filter className="mr-1 h-4 w-4 text-muted" />
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              type="button"
-              onClick={() => setSelectedCategory(cat)}
-              className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
-                selectedCategory === cat
-                  ? "bg-accent text-accent-foreground shadow-xs"
-                  : "border border-separator bg-surface text-muted hover:text-foreground"
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
+      {activeProducts.length > 0 && (
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {categories.map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setSelectedCategory(cat)}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  selectedCategory === cat
+                    ? "bg-foreground text-background"
+                    : "border border-separator bg-surface text-muted hover:text-foreground"
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
 
-        <div className="relative w-full md:w-80">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search product or size (e.g. A4, 3ft, Vinyl)..."
-            className="w-full rounded-xl border border-separator bg-surface py-2 pl-9 pr-3 text-sm text-foreground outline-none focus:border-accent"
-          />
+          <div className="relative w-full md:w-80">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Filter by product, size, or dimension..."
+              className="h-9 w-full rounded-lg border border-separator bg-surface pl-9 pr-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted focus:border-accent"
+            />
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Product Cards with Expanded Size Preview */}
+      {/* Product Directory */}
       {activeProducts.length === 0 ? (
-        <Card className="border border-dashed border-separator bg-surface p-12 text-center space-y-3">
-          <SlidersHorizontal className="mx-auto h-8 w-8 text-muted" />
-          <h3 className="text-lg font-bold text-foreground">
-            Catalog Is Ready for Your Products
-          </h3>
-          <p className="mx-auto max-w-md text-sm text-muted">
-            No products have been published to the database yet. Add products
-            and per-size pricing from the Super Admin Dashboard, or request a
-            custom print quotation directly.
-          </p>
-          <div className="flex flex-wrap justify-center gap-3">
-            <Link href="/quotations">
-              <Button variant="primary">Request Custom Quotation</Button>
-            </Link>
-            <Link href="/admin">
-              <Button variant="secondary">Open Super Admin</Button>
-            </Link>
+        <Card className="border border-separator bg-surface p-10">
+          <div className="flex flex-col items-start justify-between gap-6 md:flex-row md:items-center">
+            <div className="space-y-1.5">
+              <h3 className="text-base font-semibold text-foreground">
+                No catalog products published yet
+              </h3>
+              <p className="max-w-xl text-sm text-muted">
+                Publish your print products and per-size pricing matrices from
+                the Administration workspace, or submit a custom project
+                quotation directly.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2.5">
+              <Link href="/quotations">
+                <Button variant="primary">Request Custom Quotation</Button>
+              </Link>
+              {currentUser?.role === "super_admin" ? (
+                <Link href="/admin">
+                  <Button variant="secondary">Open Administration</Button>
+                </Link>
+              ) : (
+                <Link href="/staff/login">
+                  <Button variant="secondary">Staff Portal</Button>
+                </Link>
+              )}
+            </div>
           </div>
         </Card>
       ) : filtered.length === 0 ? (
-        <Card className="border border-separator bg-surface p-12 text-center space-y-3">
-          <SlidersHorizontal className="mx-auto h-8 w-8 text-muted" />
-          <h3 className="text-lg font-bold text-foreground">
-            No matching print products found
+        <Card className="border border-separator bg-surface p-10 text-center space-y-3">
+          <h3 className="text-base font-semibold text-foreground">
+            No matching specifications found
           </h3>
           <p className="text-sm text-muted">
-            Try clearing your search filter or submit a custom print quotation
-            for specialized jobs.
+            Clear your current filters or request a quotation for non-standard
+            dimensions.
           </p>
           <div>
             <Button
               variant="secondary"
+              size="sm"
               onPress={() => {
                 setSearch("");
                 setSelectedCategory("All");
@@ -154,59 +155,56 @@ export default function ProductsPage() {
             <Card
               key={product.id}
               onClick={() => setSelectedProduct(product)}
-              className="cursor-pointer border border-separator bg-surface p-6 transition hover:border-accent/60 hover:shadow-lg flex flex-col justify-between gap-5"
+              className="cursor-pointer border border-separator bg-surface p-6 transition-colors hover:border-foreground/30 flex flex-col justify-between gap-5"
             >
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
                   <div className="flex items-center gap-2">
-                    <Chip size="sm" color="accent" variant="soft">
+                    <span className="font-medium text-foreground">
                       {product.category}
-                    </Chip>
+                    </span>
                     {product.badge && (
-                      <Chip size="sm" color="warning" variant="soft">
+                      <span className="rounded bg-surface-secondary px-2 py-0.5 text-[11px] font-medium text-muted">
                         {product.badge}
-                      </Chip>
+                      </span>
                     )}
                   </div>
-                  <span className="flex items-center gap-1 text-xs text-muted">
-                    <Clock className="h-3.5 w-3.5" />
-                    {product.leadTimeDays}
-                  </span>
+                  <span>Lead time: {product.leadTimeDays}</span>
                 </div>
 
                 <div>
-                  <h2 className="text-xl font-bold text-foreground">
+                  <h2 className="text-lg font-semibold text-foreground">
                     {product.name}
                   </h2>
-                  <p className="mt-1 text-sm text-muted">
+                  <p className="mt-1 text-sm leading-relaxed text-muted">
                     {product.shortDescription}
                   </p>
                 </div>
 
-                {/* Full Price-Per-Size Mini Table */}
-                <div className="overflow-hidden rounded-xl border border-separator">
-                  <div className="grid grid-cols-12 bg-surface-secondary px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted">
-                    <div className="col-span-5">Size</div>
+                {/* Per-Size Rate Schedule */}
+                <div className="overflow-hidden rounded-lg border border-separator">
+                  <div className="grid grid-cols-12 bg-surface-secondary px-3 py-2 text-[11px] font-medium text-muted">
+                    <div className="col-span-5">Size Option</div>
                     <div className="col-span-3">Dimensions</div>
                     <div className="col-span-2 text-right">1+ Rate</div>
                     <div className="col-span-2 text-right">500+ Rate</div>
                   </div>
-                  <div className="divide-y divide-separator text-xs">
+                  <div className="divide-y divide-separator text-xs tabular-nums">
                     {product.sizes.map((sz) => (
                       <div
                         key={sz.id}
-                        className="grid grid-cols-12 items-center px-3 py-2 hover:bg-surface-secondary/40"
+                        className="grid grid-cols-12 items-center px-3 py-2"
                       >
-                        <div className="col-span-5 font-medium text-foreground pr-2 truncate">
+                        <div className="col-span-5 truncate pr-2 font-medium text-foreground">
                           {sz.sizeLabel}
                         </div>
-                        <div className="col-span-3 text-[11px] text-muted truncate pr-1">
+                        <div className="col-span-3 truncate pr-1 font-mono text-[11px] text-muted">
                           {sz.dimensions}
                         </div>
-                        <div className="col-span-2 text-right font-semibold text-foreground">
+                        <div className="col-span-2 text-right font-mono font-medium text-foreground">
                           {formatCurrency(sz.unitPrice)}
                         </div>
-                        <div className="col-span-2 text-right font-semibold text-accent">
+                        <div className="col-span-2 text-right font-mono font-medium text-accent">
                           {sz.bulk500Price != null
                             ? formatCurrency(sz.bulk500Price)
                             : "—"}
@@ -218,20 +216,19 @@ export default function ProductsPage() {
               </div>
 
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-separator pt-4">
-                <div className="text-xs text-muted">
-                  Min. Qty:{" "}
-                  <strong className="text-foreground">
+                <div className="text-xs text-muted tabular-nums">
+                  Minimum run:{" "}
+                  <span className="font-medium text-foreground">
                     {product.minOrderQty} {product.baseUnit}
-                  </strong>{" "}
-                  • {product.materials.length} substrates
+                  </span>{" "}
+                  · {product.materials.length} substrates
                 </div>
                 <Button
                   size="sm"
                   variant="primary"
                   onPress={() => setSelectedProduct(product)}
                 >
-                  <Ruler className="h-4 w-4" />
-                  Calculate Price / Order / Quote
+                  Configure & Calculate
                 </Button>
               </div>
             </Card>
@@ -247,4 +244,3 @@ export default function ProductsPage() {
     </div>
   );
 }
-

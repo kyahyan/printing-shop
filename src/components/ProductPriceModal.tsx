@@ -3,16 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Button, Card, Chip, Modal, Table } from "@heroui/react";
-import {
-  CheckCircle2,
-  Clock,
-  Copy,
-  FileSpreadsheet,
-  Layers,
-  Ruler,
-  ShoppingBag,
-  Sparkles,
-} from "lucide-react";
+import { AlertCircle, CheckCircle2, Copy } from "lucide-react";
 import type { Order, Product } from "@/types/printshop";
 import { usePrintShop } from "@/context/PrintShopContext";
 
@@ -55,9 +46,11 @@ export function ProductPriceModal({
   const [customNotes, setCustomNotes] = useState("");
   const [customDimensions, setCustomDimensions] = useState("");
 
-  // Result confirmation
+  // Result & submission state
   const [createdOrder, setCreatedOrder] = useState<Order | null>(null);
   const [createdQuoteRef, setCreatedQuoteRef] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -69,6 +62,7 @@ export function ProductPriceModal({
       setActionMode("browse");
       setCreatedOrder(null);
       setCreatedQuoteRef(null);
+      setSubmitError(null);
       setCustomNotes("");
       setCustomDimensions("");
     }
@@ -120,53 +114,78 @@ export function ProductPriceModal({
 
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedSize) return;
-    const order = await createOrder({
-      customerName,
-      customerEmail,
-      customerPhone,
-      orderSource: "online",
-      items: [
-        {
-          id: `item-${Date.now()}`,
-          productId: product.id,
-          productName: product.name,
-          sizeLabel: selectedSize.sizeLabel,
-          material: selectedMaterial,
-          finish: selectedFinish,
-          quantity,
-          unitPrice: breakdown.effectiveUnitPrice,
-          setupFee: breakdown.setupFee,
-          lineTotal: breakdown.lineTotal,
-        },
-      ],
-      paymentStatus: "unpaid",
-      paymentMethod,
-      deliveryMethod,
-      notes: customNotes,
-    });
-    setCreatedOrder(order);
+    if (!selectedSize || submitting) return;
+    setSubmitError(null);
+    setSubmitting(true);
+    try {
+      const order = await createOrder({
+        customerName,
+        customerEmail,
+        customerPhone,
+        orderSource: "online",
+        items: [
+          {
+            id: `item-${selectedSize.id}`,
+            productId: product.id,
+            sizeId: selectedSize.id,
+            productName: product.name,
+            sizeLabel: selectedSize.sizeLabel,
+            material: selectedMaterial,
+            finish: selectedFinish,
+            quantity,
+            unitPrice: breakdown.effectiveUnitPrice,
+            setupFee: breakdown.setupFee,
+            lineTotal: breakdown.lineTotal,
+          },
+        ],
+        paymentStatus: "unpaid",
+        paymentMethod,
+        deliveryMethod,
+        notes: customNotes,
+      });
+      setCreatedOrder(order);
+    } catch (err) {
+      setSubmitError(
+        err instanceof Error
+          ? err.message
+          : "Unable to submit order. Please verify your details."
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleRequestQuote = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedSize) return;
-    const quote = await submitInquiry({
-      customerName,
-      customerEmail,
-      customerPhone,
-      companyName: currentUser?.companyName,
-      subject: `${product.name} — ${selectedSize.sizeLabel} (${quantity} ${product.baseUnit})`,
-      productId: product.id,
-      productName: product.name,
-      selectedSize: selectedSize.sizeLabel,
-      material: selectedMaterial,
-      finish: selectedFinish,
-      quantity,
-      customDimensions: customDimensions || undefined,
-      notes: customNotes || undefined,
-    });
-    setCreatedQuoteRef(quote.referenceNumber);
+    if (!selectedSize || submitting) return;
+    setSubmitError(null);
+    setSubmitting(true);
+    try {
+      const quote = await submitInquiry({
+        customerName,
+        customerEmail,
+        customerPhone,
+        companyName: currentUser?.companyName,
+        subject: `${product.name} — ${selectedSize.sizeLabel} (${quantity} ${product.baseUnit})`,
+        productId: product.id,
+        productName: product.name,
+        selectedSize: selectedSize.sizeLabel,
+        material: selectedMaterial,
+        finish: selectedFinish,
+        quantity,
+        customDimensions: customDimensions || undefined,
+        notes: customNotes || undefined,
+      });
+      setCreatedQuoteRef(quote.referenceNumber);
+    } catch (err) {
+      setSubmitError(
+        err instanceof Error
+          ? err.message
+          : "Unable to submit quotation inquiry. Please verify your details."
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const copyReference = (ref: string) => {
@@ -187,21 +206,20 @@ export function ProductPriceModal({
         <Modal.Dialog className="max-w-4xl">
           <Modal.CloseTrigger />
           <Modal.Header className="border-b border-separator pb-4">
-            <div className="flex flex-wrap items-center gap-2 mb-1">
-              <Chip size="sm" color="accent" variant="soft">
+            <div className="mb-1.5 flex flex-wrap items-center gap-2 text-xs text-muted">
+              <span className="font-medium text-foreground">
                 {product.category}
-              </Chip>
-              {product.badge && (
-                <Chip size="sm" color="warning" variant="soft">
-                  {product.badge}
-                </Chip>
-              )}
-              <span className="flex items-center gap-1 text-xs text-muted">
-                <Clock className="h-3.5 w-3.5" />
-                Lead time: {product.leadTimeDays}
               </span>
+              <span>·</span>
+              <span>Lead time: {product.leadTimeDays}</span>
+              {product.badge && (
+                <>
+                  <span>·</span>
+                  <span>{product.badge}</span>
+                </>
+              )}
             </div>
-            <Modal.Heading className="text-xl font-bold">
+            <Modal.Heading className="text-xl font-semibold tracking-tight">
               {product.name}
             </Modal.Heading>
             <p className="mt-1 text-sm text-muted">{product.description}</p>
@@ -209,23 +227,26 @@ export function ProductPriceModal({
 
           <Modal.Body className="space-y-6 py-5">
             {createdOrder ? (
-              <Card className="border border-emerald-500/40 bg-emerald-500/5 p-6 text-center space-y-4">
-                <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-500" />
-                <div>
-                  <h3 className="text-lg font-bold text-foreground">
-                    Order Submitted Successfully!
-                  </h3>
-                  <p className="text-sm text-muted">
-                    Save your Order Reference Number below to track production or
-                    chat with our pre-press desk.
-                  </p>
+              <Card className="border border-separator bg-surface p-6 space-y-5">
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                  <div>
+                    <h3 className="text-base font-semibold text-foreground">
+                      Production Order Registered
+                    </h3>
+                    <p className="mt-0.5 text-sm text-muted">
+                      Retain your reference number below to monitor production
+                      stages or coordinate with our pre-press desk.
+                    </p>
+                  </div>
                 </div>
-                <div className="mx-auto flex max-w-sm items-center justify-between rounded-xl border border-separator bg-surface px-4 py-3">
-                  <div className="text-left">
-                    <div className="text-[11px] uppercase tracking-wider text-muted">
-                      Order Reference #
+
+                <div className="flex items-center justify-between rounded-lg border border-separator bg-surface-secondary px-4 py-3">
+                  <div>
+                    <div className="text-[11px] font-medium uppercase tracking-wider text-muted">
+                      Order Reference
                     </div>
-                    <div className="font-mono text-lg font-bold text-accent">
+                    <div className="mt-0.5 font-mono text-lg font-semibold text-foreground">
                       {createdOrder.referenceNumber}
                     </div>
                   </div>
@@ -234,50 +255,59 @@ export function ProductPriceModal({
                     variant="secondary"
                     onPress={() => copyReference(createdOrder.referenceNumber)}
                   >
-                    <Copy className="h-4 w-4" />
-                    {copied ? "Copied!" : "Copy"}
+                    <Copy className="h-3.5 w-3.5" />
+                    {copied ? "Copied" : "Copy"}
                   </Button>
                 </div>
-                <div className="text-xs text-muted">
-                  Total Estimated Amount:{" "}
-                  <strong className="text-foreground">
+
+                <div className="text-xs text-muted tabular-nums">
+                  Order Total:{" "}
+                  <strong className="font-mono text-foreground">
                     {formatCurrency(createdOrder.totalAmount)}
                   </strong>{" "}
-                  (incl. {settings.taxRate}% VAT)
+                  (inclusive of {settings.taxRate}% VAT)
                 </div>
-                <div className="flex flex-wrap justify-center gap-3 pt-2">
+
+                <div className="flex flex-wrap gap-2.5 border-t border-separator pt-4">
                   <Link
-                    href={`/track?ref=${createdOrder.referenceNumber}`}
+                    href={`/track?ref=${encodeURIComponent(createdOrder.referenceNumber)}`}
                     onClick={onClose}
                   >
-                    <Button variant="primary">Track Order Status</Button>
+                    <Button variant="primary" size="sm">
+                      View Order Status
+                    </Button>
                   </Link>
                   <Link
-                    href={`/chat?ref=${createdOrder.referenceNumber}`}
+                    href={`/chat?ref=${encodeURIComponent(createdOrder.referenceNumber)}`}
                     onClick={onClose}
                   >
-                    <Button variant="secondary">Chat About This Order</Button>
+                    <Button variant="secondary" size="sm">
+                      Open Support Ticket
+                    </Button>
                   </Link>
                 </div>
               </Card>
             ) : createdQuoteRef ? (
-              <Card className="border border-accent/40 bg-accent/5 p-6 text-center space-y-4">
-                <CheckCircle2 className="mx-auto h-12 w-12 text-accent" />
-                <div>
-                  <h3 className="text-lg font-bold text-foreground">
-                    Quotation Request Received!
-                  </h3>
-                  <p className="text-sm text-muted">
-                    Our print estimators will review your size & specifications
-                    and post your formal quotation under this reference number.
-                  </p>
+              <Card className="border border-separator bg-surface p-6 space-y-5">
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                  <div>
+                    <h3 className="text-base font-semibold text-foreground">
+                      Quotation Inquiry Logged
+                    </h3>
+                    <p className="mt-0.5 text-sm text-muted">
+                      Our estimating desk will review your specifications and
+                      publish a formal quotation under this reference.
+                    </p>
+                  </div>
                 </div>
-                <div className="mx-auto flex max-w-sm items-center justify-between rounded-xl border border-separator bg-surface px-4 py-3">
-                  <div className="text-left">
-                    <div className="text-[11px] uppercase tracking-wider text-muted">
-                      Quotation Reference #
+
+                <div className="flex items-center justify-between rounded-lg border border-separator bg-surface-secondary px-4 py-3">
+                  <div>
+                    <div className="text-[11px] font-medium uppercase tracking-wider text-muted">
+                      Quotation Reference
                     </div>
-                    <div className="font-mono text-lg font-bold text-accent">
+                    <div className="mt-0.5 font-mono text-lg font-semibold text-foreground">
                       {createdQuoteRef}
                     </div>
                   </div>
@@ -286,35 +316,44 @@ export function ProductPriceModal({
                     variant="secondary"
                     onPress={() => copyReference(createdQuoteRef)}
                   >
-                    <Copy className="h-4 w-4" />
-                    {copied ? "Copied!" : "Copy"}
+                    <Copy className="h-3.5 w-3.5" />
+                    {copied ? "Copied" : "Copy"}
                   </Button>
                 </div>
-                <div className="flex flex-wrap justify-center gap-3 pt-2">
-                  <Link href={`/track?ref=${createdQuoteRef}`} onClick={onClose}>
-                    <Button variant="primary">Track Quotation</Button>
+
+                <div className="flex flex-wrap gap-2.5 border-t border-separator pt-4">
+                  <Link
+                    href={`/track?ref=${encodeURIComponent(createdQuoteRef)}`}
+                    onClick={onClose}
+                  >
+                    <Button variant="primary" size="sm">
+                      Track Quotation
+                    </Button>
                   </Link>
-                  <Link href={`/chat?ref=${createdQuoteRef}`} onClick={onClose}>
-                    <Button variant="secondary">Join Chat Queue</Button>
+                  <Link
+                    href={`/chat?ref=${encodeURIComponent(createdQuoteRef)}`}
+                    onClick={onClose}
+                  >
+                    <Button variant="secondary" size="sm">
+                      Consult Support Desk
+                    </Button>
                   </Link>
                 </div>
               </Card>
             ) : (
               <>
-                {/* PRICE PER SIZE MATRIX TABLE */}
+                {/* PER-SIZE SCHEDULE TABLE */}
                 <div className="space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                      <Ruler className="h-4 w-4 text-accent" />
-                      Price Per Size Matrix ({product.baseUnit}) — Click any row
-                      to select
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted">
+                      Size & Volume Schedule ({product.baseUnit})
                     </h4>
-                    <span className="text-xs text-muted">
-                      Min. order: {product.minOrderQty} {product.baseUnit}
+                    <span className="text-xs text-muted tabular-nums">
+                      Minimum run: {product.minOrderQty} {product.baseUnit}
                     </span>
                   </div>
 
-                  <div className="overflow-hidden rounded-xl border border-separator">
+                  <div className="overflow-hidden rounded-lg border border-separator">
                     <Table>
                       <Table.ScrollContainer>
                         <Table.Content
@@ -322,11 +361,11 @@ export function ProductPriceModal({
                         >
                           <Table.Header>
                             <Table.Column isRowHeader>Size Option</Table.Column>
-                            <Table.Column>Exact Dimensions</Table.Column>
-                            <Table.Column>Standard Price</Table.Column>
+                            <Table.Column>Dimensions</Table.Column>
+                            <Table.Column>Standard</Table.Column>
                             <Table.Column>100+ Bulk</Table.Column>
                             <Table.Column>500+ Wholesale</Table.Column>
-                            <Table.Column>Setup Fee</Table.Column>
+                            <Table.Column>Setup</Table.Column>
                           </Table.Header>
                           <Table.Body>
                             {product.sizes.map((sz) => {
@@ -336,21 +375,21 @@ export function ProductPriceModal({
                                   key={sz.id}
                                   id={sz.id}
                                   onAction={() => setSelectedSizeId(sz.id)}
-                                  className={`cursor-pointer transition ${
+                                  className={`cursor-pointer transition-colors tabular-nums ${
                                     isSelected
-                                      ? "bg-accent/12 font-medium"
+                                      ? "bg-accent/10 font-medium"
                                       : "hover:bg-surface-secondary"
                                   }`}
                                 >
                                   <Table.Cell>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2.5">
                                       <input
                                         type="radio"
                                         checked={isSelected}
                                         onChange={() =>
                                           setSelectedSizeId(sz.id)
                                         }
-                                        className="accent-blue-600"
+                                        className="accent-current"
                                         aria-label={sz.sizeLabel}
                                       />
                                       <span className="font-medium text-foreground">
@@ -358,26 +397,26 @@ export function ProductPriceModal({
                                       </span>
                                     </div>
                                   </Table.Cell>
-                                  <Table.Cell className="text-xs text-muted">
+                                  <Table.Cell className="font-mono text-xs text-muted">
                                     {sz.dimensions}
                                   </Table.Cell>
-                                  <Table.Cell className="font-semibold text-foreground">
+                                  <Table.Cell className="font-mono font-medium text-foreground">
                                     {formatCurrency(sz.unitPrice)}
                                   </Table.Cell>
-                                  <Table.Cell className="text-emerald-600 dark:text-emerald-400 font-medium">
+                                  <Table.Cell className="font-mono text-foreground">
                                     {sz.bulk100Price != null
                                       ? formatCurrency(sz.bulk100Price)
                                       : "—"}
                                   </Table.Cell>
-                                  <Table.Cell className="text-accent font-semibold">
+                                  <Table.Cell className="font-mono font-medium text-accent">
                                     {sz.bulk500Price != null
                                       ? formatCurrency(sz.bulk500Price)
                                       : "—"}
                                   </Table.Cell>
-                                  <Table.Cell className="text-xs text-muted">
+                                  <Table.Cell className="font-mono text-xs text-muted">
                                     {sz.setupFee > 0
                                       ? formatCurrency(sz.setupFee)
-                                      : "Free"}
+                                      : "Included"}
                                   </Table.Cell>
                                 </Table.Row>
                               );
@@ -389,23 +428,22 @@ export function ProductPriceModal({
                   </div>
                 </div>
 
-                {/* INTERACTIVE CONFIGURATOR & LIVE CALCULATOR */}
-                <div className="grid gap-4 rounded-2xl border border-separator bg-surface-secondary/50 p-4 md:grid-cols-3">
-                  <div className="space-y-3 md:col-span-2">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                      <Layers className="h-4 w-4 text-accent" />
-                      Configure Specifications
+                {/* SPECIFICATION CONFIGURATOR & LIVE ESTIMATE */}
+                <div className="grid gap-4 rounded-xl border border-separator bg-surface-secondary/50 p-4 md:grid-cols-3">
+                  <div className="space-y-3.5 md:col-span-2">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-muted">
+                      Specification Parameters
                     </div>
 
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div>
                         <label className="mb-1 block text-xs font-medium text-muted">
-                          Paper / Substrate Material
+                          Substrate / Paper Stock
                         </label>
                         <select
                           value={selectedMaterial}
                           onChange={(e) => setSelectedMaterial(e.target.value)}
-                          className="w-full rounded-xl border border-separator bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+                          className="h-9 w-full rounded-lg border border-separator bg-surface px-3 text-sm text-foreground outline-none focus:border-accent"
                         >
                           {product.materials.map((m) => (
                             <option key={m.name} value={m.name}>
@@ -427,7 +465,7 @@ export function ProductPriceModal({
                         <select
                           value={selectedFinish}
                           onChange={(e) => setSelectedFinish(e.target.value)}
-                          className="w-full rounded-xl border border-separator bg-surface px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+                          className="h-9 w-full rounded-lg border border-separator bg-surface px-3 text-sm text-foreground outline-none focus:border-accent"
                         >
                           {product.finishes.map((f) => (
                             <option key={f.name} value={f.name}>
@@ -443,7 +481,7 @@ export function ProductPriceModal({
 
                     <div>
                       <label className="mb-1 block text-xs font-medium text-muted">
-                        Quantity ({product.baseUnit})
+                        Run Quantity ({product.baseUnit})
                       </label>
                       <div className="flex flex-wrap items-center gap-2">
                         <input
@@ -453,29 +491,26 @@ export function ProductPriceModal({
                           onChange={(e) =>
                             setQuantity(
                               Math.max(
-                                1,
+                                product.minOrderQty || 1,
                                 Number.parseInt(e.target.value || "1", 10)
                               )
                             )
                           }
-                          className="w-32 rounded-xl border border-separator bg-surface px-3 py-2 text-sm font-semibold text-foreground outline-none focus:border-accent"
+                          className="h-9 w-28 rounded-lg border border-separator bg-surface px-3 font-mono text-sm font-medium text-foreground outline-none focus:border-accent tabular-nums"
                         />
-                        {[
-                          product.minOrderQty,
-                          50,
-                          100,
-                          250,
-                          500,
-                        ]
-                          .filter((v, idx, arr) => v >= product.minOrderQty && arr.indexOf(v) === idx)
+                        {[product.minOrderQty, 50, 100, 250, 500]
+                          .filter(
+                            (v, idx, arr) =>
+                              v >= product.minOrderQty && arr.indexOf(v) === idx
+                          )
                           .map((preset) => (
                             <button
                               key={preset}
                               type="button"
                               onClick={() => setQuantity(preset)}
-                              className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition ${
+                              className={`h-9 rounded-lg border px-2.5 font-mono text-xs font-medium transition-colors tabular-nums ${
                                 quantity === preset
-                                  ? "border-accent bg-accent text-accent-foreground"
+                                  ? "border-foreground bg-foreground text-background"
                                   : "border-separator bg-surface text-muted hover:text-foreground"
                               }`}
                             >
@@ -486,65 +521,74 @@ export function ProductPriceModal({
                     </div>
                   </div>
 
-                  {/* Live Price Box */}
-                  <div className="flex flex-col justify-between rounded-xl border border-separator bg-surface p-4">
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted">Pricing Tier</span>
-                        <Chip size="sm" color="success" variant="soft">
-                          <Sparkles className="mr-1 inline h-3 w-3" />
+                  {/* Itemized Summary */}
+                  <div className="flex flex-col justify-between rounded-lg border border-separator bg-surface p-4 tabular-nums">
+                    <div className="space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted">Rate Schedule</span>
+                        <Chip size="sm" color="default" variant="secondary">
                           {breakdown.appliedTier}
                         </Chip>
                       </div>
-                      <div className="flex items-center justify-between text-xs text-muted">
-                        <span>Unit Price ({selectedSize?.sizeLabel})</span>
-                        <span className="font-semibold text-foreground">
+                      <div className="flex items-center justify-between text-muted">
+                        <span>Unit Rate</span>
+                        <span className="font-mono font-medium text-foreground">
                           {formatCurrency(breakdown.effectiveUnitPrice)}
                         </span>
                       </div>
                       {breakdown.setupFee > 0 && (
-                        <div className="flex items-center justify-between text-xs text-muted">
-                          <span>Plate / Setup Fee</span>
-                          <span>{formatCurrency(breakdown.setupFee)}</span>
+                        <div className="flex items-center justify-between text-muted">
+                          <span>Setup / Plate</span>
+                          <span className="font-mono text-foreground">
+                            {formatCurrency(breakdown.setupFee)}
+                          </span>
                         </div>
                       )}
-                      <div className="flex items-center justify-between text-xs text-muted">
-                        <span>Subtotal ({quantity}×)</span>
-                        <span>{formatCurrency(breakdown.lineTotal)}</span>
+                      <div className="flex items-center justify-between text-muted">
+                        <span>Net Subtotal ({quantity}×)</span>
+                        <span className="font-mono text-foreground">
+                          {formatCurrency(breakdown.lineTotal)}
+                        </span>
                       </div>
-                      <div className="flex items-center justify-between text-xs text-muted">
-                        <span>Tax ({settings.taxRate}%)</span>
-                        <span>{formatCurrency(taxAmount)}</span>
+                      <div className="flex items-center justify-between text-muted">
+                        <span>VAT ({settings.taxRate}%)</span>
+                        <span className="font-mono text-foreground">
+                          {formatCurrency(taxAmount)}
+                        </span>
                       </div>
                     </div>
 
                     <div className="mt-4 border-t border-separator pt-3">
-                      <div className="text-[11px] uppercase tracking-wider text-muted">
+                      <div className="text-[11px] font-medium uppercase tracking-wider text-muted">
                         Estimated Total
                       </div>
-                      <div className="text-2xl font-extrabold text-accent">
+                      <div className="mt-0.5 font-mono text-xl font-semibold text-foreground">
                         {formatCurrency(estimatedGrandTotal)}
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* ACTION FORMS (ORDER OR QUOTATION) */}
+                {/* ORDER / QUOTE FORM */}
                 {actionMode === "browse" ? (
-                  <div className="flex flex-wrap items-center justify-end gap-3">
+                  <div className="flex flex-wrap items-center justify-end gap-2.5">
                     <Button
                       variant="secondary"
-                      onPress={() => setActionMode("quote")}
+                      onPress={() => {
+                        setSubmitError(null);
+                        setActionMode("quote");
+                      }}
                     >
-                      <FileSpreadsheet className="h-4 w-4" />
-                      Request Custom Quotation
+                      Request Formal Quote
                     </Button>
                     <Button
                       variant="primary"
-                      onPress={() => setActionMode("order")}
+                      onPress={() => {
+                        setSubmitError(null);
+                        setActionMode("order");
+                      }}
                     >
-                      <ShoppingBag className="h-4 w-4" />
-                      Order This Size Now
+                      Place Direct Order
                     </Button>
                   </div>
                 ) : (
@@ -554,34 +598,44 @@ export function ProductPriceModal({
                         ? handlePlaceOrder
                         : handleRequestQuote
                     }
-                    className="space-y-4 rounded-2xl border border-accent/30 bg-surface p-4"
+                    className="space-y-4 rounded-xl border border-separator bg-surface p-4"
                   >
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-semibold text-foreground">
+                    <div className="flex items-center justify-between border-b border-separator pb-3">
+                      <h4 className="text-sm font-semibold text-foreground">
                         {actionMode === "order"
-                          ? "Complete Direct Order & Generate Reference #"
-                          : "Request Official Quotation & Reference #"}
+                          ? "Direct Production Order"
+                          : "Formal Quotation Inquiry"}
                       </h4>
                       <button
                         type="button"
-                        onClick={() => setActionMode("browse")}
+                        onClick={() => {
+                          setSubmitError(null);
+                          setActionMode("browse");
+                        }}
                         className="text-xs text-muted hover:text-foreground"
                       >
                         Cancel
                       </button>
                     </div>
 
+                    {submitError && (
+                      <div className="flex items-center gap-2 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
+                        <AlertCircle className="h-4 w-4 shrink-0" />
+                        <span>{submitError}</span>
+                      </div>
+                    )}
+
                     <div className="grid gap-3 sm:grid-cols-3">
                       <div>
                         <label className="mb-1 block text-xs font-medium text-muted">
-                          Full Name *
+                          Contact Name *
                         </label>
                         <input
                           required
                           value={customerName}
                           onChange={(e) => setCustomerName(e.target.value)}
-                          placeholder="Juan Dela Cruz"
-                          className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+                          placeholder="Full name"
+                          className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
                         />
                       </div>
                       <div>
@@ -593,20 +647,20 @@ export function ProductPriceModal({
                           type="email"
                           value={customerEmail}
                           onChange={(e) => setCustomerEmail(e.target.value)}
-                          placeholder="you@company.com"
-                          className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+                          placeholder="name@company.com"
+                          className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
                         />
                       </div>
                       <div>
                         <label className="mb-1 block text-xs font-medium text-muted">
-                          Mobile / Phone *
+                          Telephone / Mobile *
                         </label>
                         <input
                           required
                           value={customerPhone}
                           onChange={(e) => setCustomerPhone(e.target.value)}
                           placeholder="+63 917 000 0000"
-                          className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+                          className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
                         />
                       </div>
                     </div>
@@ -624,68 +678,73 @@ export function ProductPriceModal({
                                 e.target.value as "pickup" | "courier"
                               )
                             }
-                            className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
+                            className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
                           >
                             <option value="pickup">
-                              Store Pickup ({settings.shopName})
+                              Studio Pickup ({settings.shopName})
                             </option>
                             <option value="courier">
-                              Courier Delivery (Lalamove / Grab / Freight)
+                              Courier Dispatch (Client-Arranged / Freight)
                             </option>
                           </select>
                         </div>
                         <div>
                           <label className="mb-1 block text-xs font-medium text-muted">
-                            Preferred Payment Channel
+                            Settlement Channel
                           </label>
                           <select
                             value={paymentMethod}
                             onChange={(e) => setPaymentMethod(e.target.value)}
-                            className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
+                            className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
                           >
                             <option value="gcash_ewallet">
                               GCash / Maya E-Wallet
                             </option>
                             <option value="bank_transfer">
-                              Bank Transfer (BDO / BPI)
+                              Corporate Bank Transfer (BDO / BPI)
                             </option>
-                            <option value="cash">Pay at Print Shop Counter</option>
+                            <option value="cash">Counter Settlement</option>
                           </select>
                         </div>
                       </div>
                     ) : (
                       <div>
                         <label className="mb-1 block text-xs font-medium text-muted">
-                          Custom Dimensions / Special Cut (Optional)
+                          Custom Trim Dimensions / Dieline Notes (Optional)
                         </label>
                         <input
                           value={customDimensions}
                           onChange={(e) => setCustomDimensions(e.target.value)}
-                          placeholder="e.g., Custom 4.25 × 6.5 in die-cut arch with gold foil"
-                          className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+                          placeholder="e.g., 4.25 × 6.5 in custom die-cut with foil stamping"
+                          className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
                         />
                       </div>
                     )}
 
                     <div>
                       <label className="mb-1 block text-xs font-medium text-muted">
-                        Artwork Link (Google Drive / Canva / Dropbox) & Print
-                        Notes
+                        Artwork File Link (HTTPS) & Production Instructions
                       </label>
                       <textarea
                         rows={2}
                         value={customNotes}
                         onChange={(e) => setCustomNotes(e.target.value)}
-                        placeholder="Paste artwork link, Pantone notes, SKU split, or target deadline..."
-                        className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+                        placeholder="Provide Google Drive / Dropbox link, Pantone references, SKU split, or target completion date..."
+                        className="w-full rounded-lg border border-separator bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
                       />
                     </div>
 
                     <div className="flex justify-end gap-2">
-                      <Button type="submit" variant="primary">
-                        {actionMode === "order"
-                          ? `Confirm Order (${formatCurrency(estimatedGrandTotal)})`
-                          : "Submit Quotation Inquiry"}
+                      <Button
+                        type="submit"
+                        variant="primary"
+                        isDisabled={submitting}
+                      >
+                        {submitting
+                          ? "Submitting..."
+                          : actionMode === "order"
+                            ? `Submit Order (${formatCurrency(estimatedGrandTotal)})`
+                            : "Submit Quotation Inquiry"}
                       </Button>
                     </div>
                   </form>

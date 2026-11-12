@@ -2,14 +2,15 @@
 
 import React, { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Button, Card, Chip } from "@heroui/react";
-import { KeyRound, ShieldAlert } from "lucide-react";
+import { Button, Card } from "@heroui/react";
+import { AlertCircle } from "lucide-react";
 import { usePrintShop } from "@/context/PrintShopContext";
+import { sanitizeSafeNextPath } from "@/lib/security";
 
 function StaffLoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const nextPath = searchParams.get("next");
+  const rawNextPath = searchParams.get("next");
   const errorParam = searchParams.get("error");
 
   const { login, settings } = usePrintShop();
@@ -18,10 +19,14 @@ function StaffLoginContent() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(
     errorParam === "account_disabled"
-      ? "Your staff account has been disabled by a Super Administrator."
+      ? "Your staff account has been deactivated by an administrator."
       : null
   );
   const [loading, setLoading] = useState(false);
+
+  const safeNextPreview = rawNextPath
+    ? sanitizeSafeNextPath(rawNextPath, "")
+    : "";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,86 +36,89 @@ function StaffLoginContent() {
     setLoading(false);
 
     if (!res.ok || !res.user) {
-      setError(res.error || "Unable to authenticate.");
+      setError(res.error || "Unable to authenticate credentials.");
       return;
     }
 
     router.refresh();
+    const defaultTarget =
+      res.user.role === "super_admin" ? "/admin" : "/dashboard";
+    const resolvedTarget = sanitizeSafeNextPath(rawNextPath, defaultTarget);
+
     if (
-      nextPath &&
-      nextPath.startsWith("/") &&
-      !nextPath.startsWith("//") &&
-      (res.user.role === "super_admin" || !nextPath.startsWith("/admin"))
+      resolvedTarget.startsWith("/admin") &&
+      res.user.role !== "super_admin"
     ) {
-      router.push(nextPath);
+      router.push("/dashboard");
       return;
     }
 
-    if (res.user.role === "super_admin") {
-      router.push("/admin");
-    } else {
-      router.push("/dashboard");
-    }
+    router.push(resolvedTarget);
   };
 
   return (
-    <div className="mx-auto max-w-xl px-4 py-14 space-y-6">
-      <div className="text-center space-y-2">
-        <Chip size="sm" color="warning" variant="soft">
-          Protected Staff Route
-        </Chip>
-        <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
+    <div className="mx-auto max-w-md px-4 py-16 space-y-6">
+      <div className="space-y-1.5">
+        <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted">
+          Internal Access
+        </p>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
           {settings.shopName} Staff Portal
         </h1>
-        <p className="text-xs text-muted">
-          Authorized portal for Print Shop Employees (Order Desk, Quotations &
-          Chat Queue) and Super Administrators.
+        <p className="text-xs leading-relaxed text-muted">
+          Restricted to authorized operations personnel and system
+          administrators.
         </p>
       </div>
 
-      {nextPath && (
-        <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-600 dark:text-amber-400">
-          <ShieldAlert className="h-4 w-4 shrink-0" />
+      {safeNextPreview && (
+        <div className="flex items-center gap-2 rounded-lg border border-separator bg-surface-secondary px-3.5 py-2.5 text-xs text-muted">
           <span>
-            Please sign in with an authorized staff account to access{" "}
-            <code className="font-mono font-bold">{nextPath}</code>.
+            Authenticate to continue to{" "}
+            <code className="font-mono font-medium text-foreground">
+              {safeNextPreview}
+            </code>
+            .
           </span>
         </div>
       )}
 
-      <Card className="border border-separator bg-surface p-6 space-y-5 shadow-lg">
+      <Card className="border border-separator bg-surface p-6 space-y-5 shadow-surface">
         {error && (
-          <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-500">
-            {error}
+          <div className="flex items-start gap-2 rounded-lg border border-danger/30 bg-danger/10 p-3 text-xs text-danger">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{error}</span>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="mb-1 block text-xs font-semibold text-foreground">
-              Staff Email
+            <label className="mb-1 block text-xs font-medium text-foreground">
+              Work Email
             </label>
             <input
               required
               type="email"
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@clayjar.com.ph"
-              className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3.5 py-2.5 text-sm text-foreground outline-none focus:border-accent"
+              placeholder="staff@clayjar.com.ph"
+              className="h-10 w-full rounded-lg border border-separator bg-background px-3.5 text-sm text-foreground outline-none focus:border-accent"
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-semibold text-foreground">
+            <label className="mb-1 block text-xs font-medium text-foreground">
               Password
             </label>
             <input
               required
               type="password"
+              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3.5 py-2.5 text-sm text-foreground outline-none focus:border-accent"
+              className="h-10 w-full rounded-lg border border-separator bg-background px-3.5 text-sm text-foreground outline-none focus:border-accent"
             />
           </div>
 
@@ -120,8 +128,7 @@ function StaffLoginContent() {
             fullWidth
             isDisabled={loading}
           >
-            <KeyRound className="h-4 w-4" />
-            {loading ? "Verifying Credentials..." : "Sign In to Staff Workspace"}
+            {loading ? "Authenticating..." : "Sign In to Workspace"}
           </Button>
         </form>
       </Card>
@@ -133,7 +140,7 @@ export default function StaffLoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="mx-auto max-w-xl px-4 py-20 text-center text-sm text-muted">
+        <div className="mx-auto max-w-md px-4 py-20 text-center text-sm text-muted">
           Loading Staff Authentication...
         </div>
       }

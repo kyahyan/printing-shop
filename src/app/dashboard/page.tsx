@@ -4,20 +4,13 @@ import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Button, Card, Chip, Tabs } from "@heroui/react";
 import {
-  Briefcase,
+  AlertCircle,
   CheckCircle2,
   Copy,
   ExternalLink,
-  FileSpreadsheet,
-  Headset,
-  Package,
   Plus,
-  Printer,
   Send,
-  ShieldCheck,
-  ShoppingBag,
   Trash2,
-  UserCheck,
 } from "lucide-react";
 import { usePrintShop } from "@/context/PrintShopContext";
 import type {
@@ -26,6 +19,7 @@ import type {
   ProductionStatus,
   TicketPriority,
 } from "@/types/printshop";
+import { sanitizeExternalUrl } from "@/lib/security";
 
 export default function EmployeeDashboardPage() {
   const {
@@ -53,6 +47,8 @@ export default function EmployeeDashboardPage() {
   const isAuthorized =
     currentUser?.role === "employee" || currentUser?.role === "super_admin";
 
+  const [deskError, setDeskError] = useState<string | null>(null);
+
   // --- TAB 1: INQUIRIES & QUOTATIONS STATE ---
   const [quoteFilter, setQuoteFilter] = useState<string>("all");
   const [selectedInquiryId, setSelectedInquiryId] = useState<string | null>(
@@ -66,7 +62,8 @@ export default function EmployeeDashboardPage() {
   const [quoteSavedToast, setQuoteSavedToast] = useState<string | null>(null);
 
   const selectedInquiry = useMemo(
-    () => inquiries.find((i) => i.id === selectedInquiryId) ?? inquiries[0] ?? null,
+    () =>
+      inquiries.find((i) => i.id === selectedInquiryId) ?? inquiries[0] ?? null,
     [inquiries, selectedInquiryId]
   );
 
@@ -79,7 +76,6 @@ export default function EmployeeDashboardPage() {
       setQuoteRemarks(selectedInquiry.staffRemarks ?? "");
       setQuoteValidUntil(selectedInquiry.validUntil ?? "");
     } else {
-      // Auto-suggest benchmark price from catalog product if matched
       const prod = products.find((p) => p.id === selectedInquiry.productId);
       const sz = prod?.sizes.find(
         (s) => s.sizeLabel === selectedInquiry.selectedSize
@@ -120,7 +116,8 @@ export default function EmployeeDashboardPage() {
     activeProducts[0]?.id ?? ""
   );
   const posProduct = useMemo(
-    () => activeProducts.find((p) => p.id === posProductId) ?? activeProducts[0],
+    () =>
+      activeProducts.find((p) => p.id === posProductId) ?? activeProducts[0],
     [activeProducts, posProductId]
   );
   const [posSizeId, setPosSizeId] = useState<string>(
@@ -142,7 +139,7 @@ export default function EmployeeDashboardPage() {
   const [posPaymentStatus, setPosPaymentStatus] =
     useState<PaymentStatus>("downpayment_paid");
   const [posPaymentMethod, setPosPaymentMethod] = useState("cash");
-  const [posAmountPaid, setPosAmountPaid] = useState<number>(0);
+  const [posAmountPaid] = useState<number>(0);
   const [posDelivery, setPosDelivery] = useState<"pickup" | "courier">(
     "pickup"
   );
@@ -189,26 +186,25 @@ export default function EmployeeDashboardPage() {
   if (loading) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-20 text-center text-sm text-muted">
-        Loading Employee Operations Desk...
+        Loading Operations Desk...
       </div>
     );
   }
 
   if (!isAuthorized) {
     return (
-      <div className="mx-auto max-w-lg px-4 py-20 text-center space-y-4">
+      <div className="mx-auto max-w-md px-4 py-20 text-center">
         <Card className="border border-separator bg-surface p-8 space-y-4">
-          <Briefcase className="mx-auto h-12 w-12 text-accent" />
-          <h1 className="text-2xl font-extrabold text-foreground">
-            Employee Authorization Required
+          <h1 className="text-lg font-semibold text-foreground">
+            Staff Authorization Required
           </h1>
-          <p className="text-sm text-muted">
-            Sign in with an Employee or Super Admin account to access Inquiries,
-            Order Taking, and the Customer Support Chat Queue.
+          <p className="text-xs leading-relaxed text-muted">
+            Sign in with an active Employee or Super Administrator account to
+            access quotations, counter POS orders, and the support queue.
           </p>
-          <div className="flex justify-center gap-3">
+          <div className="flex justify-center">
             <Link href="/staff/login">
-              <Button variant="primary">Go to Staff Login</Button>
+              <Button variant="primary">Open Staff Portal</Button>
             </Link>
           </div>
         </Card>
@@ -221,7 +217,11 @@ export default function EmployeeDashboardPage() {
   ).length;
   const queuedTickets = tickets.filter((t) => t.status === "queued");
   const activeOrdersCount = orders.filter(
-    (o) => o.productionStatus !== "completed" && o.productionStatus !== "cancelled"
+    (o) =>
+      o.productionStatus !== "completed" && o.productionStatus !== "cancelled"
+  ).length;
+  const readyForPickupCount = orders.filter(
+    (o) => o.productionStatus === "ready_for_pickup"
   ).length;
 
   const filteredInquiries = inquiries.filter((i) =>
@@ -241,35 +241,53 @@ export default function EmployeeDashboardPage() {
       )
     : 0;
 
+  const safeArtworkHref = selectedInquiry?.artworkUrl
+    ? sanitizeExternalUrl(selectedInquiry.artworkUrl)
+    : null;
+
   const handleSendQuoteSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedInquiry) return;
-    await sendQuotation(selectedInquiry.id, {
-      quotedUnitPrice: quoteUnitPrice,
-      quotedSetupFee: quoteSetupFee,
-      quotedDiscount: quoteDiscount,
-      staffRemarks: quoteRemarks,
-      validUntil: quoteValidUntil,
-    });
-    setQuoteSavedToast(
-      `Quotation ${selectedInquiry.referenceNumber} sent (${formatCurrency(
-        computedQuoteTotal
-      )})`
-    );
-    setTimeout(() => setQuoteSavedToast(null), 3500);
+    setDeskError(null);
+    try {
+      await sendQuotation(selectedInquiry.id, {
+        quotedUnitPrice: quoteUnitPrice,
+        quotedSetupFee: quoteSetupFee,
+        quotedDiscount: quoteDiscount,
+        staffRemarks: quoteRemarks,
+        validUntil: quoteValidUntil,
+      });
+      setQuoteSavedToast(
+        `Quotation ${selectedInquiry.referenceNumber} published (${formatCurrency(
+          computedQuoteTotal
+        )}).`
+      );
+      setTimeout(() => setQuoteSavedToast(null), 3500);
+    } catch (err) {
+      setDeskError(
+        err instanceof Error ? err.message : "Failed to publish quotation."
+      );
+    }
   };
 
   const handleConvertInquiry = async (inquiryId: string) => {
-    const ord = await convertQuotationToOrder(inquiryId, {
-      paymentStatus: "downpayment_paid",
-      paymentMethod: "bank_transfer",
-      deliveryMethod: "pickup",
-    });
-    if (ord) {
-      setQuoteSavedToast(
-        `Converted to Production Order ${ord.referenceNumber}!`
+    setDeskError(null);
+    try {
+      const ord = await convertQuotationToOrder(inquiryId, {
+        paymentStatus: "downpayment_paid",
+        paymentMethod: "bank_transfer",
+        deliveryMethod: "pickup",
+      });
+      if (ord) {
+        setQuoteSavedToast(
+          `Converted quotation to Production Order ${ord.referenceNumber}.`
+        );
+        setTimeout(() => setQuoteSavedToast(null), 4000);
+      }
+    } catch (err) {
+      setDeskError(
+        err instanceof Error ? err.message : "Failed to convert quotation."
       );
-      setTimeout(() => setQuoteSavedToast(null), 4000);
     }
   };
 
@@ -290,6 +308,7 @@ export default function EmployeeDashboardPage() {
     const item: OrderItem = {
       id: `pos-item-${Date.now()}`,
       productId: posProduct.id,
+      sizeId: sz.id,
       productName: posProduct.name,
       sizeLabel: sz.sizeLabel,
       material: posMaterial,
@@ -310,35 +329,42 @@ export default function EmployeeDashboardPage() {
   const handleCreateWalkInOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (draftItems.length === 0) return;
-    const paid =
-      posPaymentStatus === "paid"
-        ? posGrandTotal
-        : posPaymentStatus === "unpaid"
-        ? 0
-        : posAmountPaid || Number((posGrandTotal * 0.5).toFixed(2));
+    setDeskError(null);
+    try {
+      const paid =
+        posPaymentStatus === "paid"
+          ? posGrandTotal
+          : posPaymentStatus === "unpaid"
+            ? 0
+            : posAmountPaid || Number((posGrandTotal * 0.5).toFixed(2));
 
-    const created = await createOrder({
-      customerName: posCustomerName,
-      customerEmail: posCustomerEmail || "walkin@customer.local",
-      customerPhone: posCustomerPhone,
-      orderSource: "walk_in",
-      items: draftItems,
-      discountAmount: posDiscount,
-      paymentStatus: posPaymentStatus,
-      amountPaid: paid,
-      paymentMethod: posPaymentMethod,
-      deliveryMethod: posDelivery,
-      notes: posNotes || undefined,
-      estimatedCompletion: posEstDate || undefined,
-    });
+      const created = await createOrder({
+        customerName: posCustomerName,
+        customerEmail: posCustomerEmail || "counter@clayjar.com.ph",
+        customerPhone: posCustomerPhone,
+        orderSource: "walk_in",
+        items: draftItems,
+        discountAmount: posDiscount,
+        paymentStatus: posPaymentStatus,
+        amountPaid: paid,
+        paymentMethod: posPaymentMethod,
+        deliveryMethod: posDelivery,
+        notes: posNotes || undefined,
+        estimatedCompletion: posEstDate || undefined,
+      });
 
-    setCreatedWalkInRef(created.referenceNumber);
-    setDraftItems([]);
-    setPosCustomerName("");
-    setPosCustomerEmail("");
-    setPosCustomerPhone("");
-    setPosDiscount(0);
-    setPosNotes("");
+      setCreatedWalkInRef(created.referenceNumber);
+      setDraftItems([]);
+      setPosCustomerName("");
+      setPosCustomerEmail("");
+      setPosCustomerPhone("");
+      setPosDiscount(0);
+      setPosNotes("");
+    } catch (err) {
+      setDeskError(
+        err instanceof Error ? err.message : "Failed to create counter order."
+      );
+    }
   };
 
   // Chat Queue Handlers
@@ -353,16 +379,23 @@ export default function EmployeeDashboardPage() {
   const handleStaffSendChat = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTicket || !staffReply.trim()) return;
-    if (selectedTicket.status === "queued") {
-      await claimTicket(selectedTicket.id);
+    setDeskError(null);
+    try {
+      if (selectedTicket.status === "queued") {
+        await claimTicket(selectedTicket.id);
+      }
+      await sendChatMessage(
+        selectedTicket.id,
+        staffReply,
+        "employee",
+        currentUser.fullName
+      );
+      setStaffReply("");
+    } catch (err) {
+      setDeskError(
+        err instanceof Error ? err.message : "Failed to send message."
+      );
     }
-    await sendChatMessage(
-      selectedTicket.id,
-      staffReply,
-      "employee",
-      currentUser.fullName
-    );
-    setStaffReply("");
   };
 
   const filteredTicketsList = tickets.filter((t) => {
@@ -372,107 +405,109 @@ export default function EmployeeDashboardPage() {
   });
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 space-y-6">
-      {/* Top Staff Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-separator pb-5">
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 space-y-6">
+      {/* Header */}
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-separator pb-5">
         <div>
-          <div className="flex items-center gap-2">
-            <Chip size="sm" color="accent" variant="soft">
-              Employee Operations Desk
-            </Chip>
-            <span className="text-xs text-muted">
-              Signed in as{" "}
-              <strong className="text-foreground">{currentUser.fullName}</strong>{" "}
-              ({currentUser.department || currentUser.role})
-            </span>
-          </div>
-          <h1 className="mt-1 text-2xl font-extrabold text-foreground sm:text-3xl">
-            Inquiries, Order Desk & Support Queue
+          <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted">
+            Operations Workspace · {currentUser.fullName} (
+            {currentUser.department || currentUser.role.replace("_", " ")})
+          </p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
+            Estimating, Production & Support Desk
           </h1>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             size="sm"
             variant={currentUser.isOnline ? "primary" : "secondary"}
             onPress={() => toggleEmployeeOnline(currentUser.id)}
           >
-            <UserCheck className="h-4 w-4" />
-            {currentUser.isOnline
-              ? "Queue Status: Online"
-              : "Queue Status: Away"}
+            <span
+              className={`mr-1.5 inline-block h-2 w-2 rounded-full ${
+                currentUser.isOnline
+                  ? "bg-emerald-400"
+                  : "bg-muted"
+              }`}
+            />
+            {currentUser.isOnline ? "On Duty (Queue)" : "Away"}
           </Button>
 
           {currentUser.role === "super_admin" && (
             <Link href="/admin">
               <Button size="sm" variant="secondary">
-                <ShieldCheck className="h-4 w-4" />
-                Super Admin Settings & Pricing
+                Administration
               </Button>
             </Link>
           )}
         </div>
       </div>
 
-      {/* KPI Summary Strip */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <Card className="border border-separator bg-surface p-4">
-          <div className="text-xs text-muted">Pending Quote Inquiries</div>
-          <div className="mt-1 text-2xl font-extrabold text-amber-500">
+      {deskError && (
+        <div className="flex items-center gap-2 rounded-lg border border-danger/30 bg-danger/10 px-4 py-2.5 text-xs text-danger">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{deskError}</span>
+        </div>
+      )}
+
+      {/* Operational KPI Ledger */}
+      <div className="grid grid-cols-2 divide-x divide-y divide-separator overflow-hidden rounded-xl border border-separator bg-surface md:grid-cols-4 md:divide-y-0 tabular-nums">
+        <div className="p-4">
+          <div className="text-xs text-muted">Pending Quotations</div>
+          <div className="mt-1 text-2xl font-semibold text-foreground">
             {pendingInquiriesCount}
           </div>
-          <div className="text-[11px] text-muted">
-            {inquiries.length} total inquiries logged
+          <div className="mt-0.5 text-[11px] text-muted">
+            {inquiries.length} total inquiries
           </div>
-        </Card>
+        </div>
 
-        <Card className="border border-separator bg-surface p-4">
-          <div className="text-xs text-muted">Active Production Jobs</div>
-          <div className="mt-1 text-2xl font-extrabold text-accent">
+        <div className="p-4">
+          <div className="text-xs text-muted">Active Production</div>
+          <div className="mt-1 text-2xl font-semibold text-foreground">
             {activeOrdersCount}
           </div>
-          <div className="text-[11px] text-muted">
-            Across pre-press, press & finishing
+          <div className="mt-0.5 text-[11px] text-muted">
+            Pre-press, press & finishing
           </div>
-        </Card>
+        </div>
 
-        <Card className="border border-separator bg-surface p-4">
-          <div className="text-xs text-muted">Waiting in Chat Queue</div>
-          <div className="mt-1 text-2xl font-extrabold text-rose-500">
+        <div className="p-4">
+          <div className="text-xs text-muted">Queued Support</div>
+          <div className="mt-1 text-2xl font-semibold text-foreground">
             {queuedTickets.length}
           </div>
-          <div className="text-[11px] text-muted">
-            {tickets.filter((t) => t.status === "active").length} active chats
-            in progress
+          <div className="mt-0.5 text-[11px] text-muted">
+            {tickets.filter((t) => t.status === "active").length} active threads
           </div>
-        </Card>
+        </div>
 
-        <Card className="border border-separator bg-surface p-4">
-          <div className="text-xs text-muted">Ready for Customer Pickup</div>
-          <div className="mt-1 text-2xl font-extrabold text-emerald-500">
-            {
-              orders.filter((o) => o.productionStatus === "ready_for_pickup")
-                .length
-            }
+        <div className="p-4">
+          <div className="text-xs text-muted">Ready for Release</div>
+          <div className="mt-1 text-2xl font-semibold text-foreground">
+            {readyForPickupCount}
           </div>
-          <div className="text-[11px] text-muted">Awaiting release / courier</div>
-        </Card>
+          <div className="mt-0.5 text-[11px] text-muted">
+            Awaiting pickup / dispatch
+          </div>
+        </div>
       </div>
 
       {/* WORKSPACE TABS */}
       <Tabs defaultSelectedKey="inquiries" className="space-y-5">
         <Tabs.ListContainer>
-          <Tabs.List aria-label="Employee workspace modules">
+          <Tabs.List aria-label="Operations modules">
             <Tabs.Tab id="inquiries">
-              Inquiries & Quotations ({inquiries.length})
+              Quotations ({inquiries.length})
               <Tabs.Indicator />
             </Tabs.Tab>
             <Tabs.Tab id="orders">
-              Take Orders (POS) & Production ({orders.length})
+              Counter POS & Orders ({orders.length})
               <Tabs.Indicator />
             </Tabs.Tab>
             <Tabs.Tab id="chatqueue">
-              Customer Chat Queue ({queuedTickets.length} Waiting)
+              Support Queue ({queuedTickets.length} waiting)
               <Tabs.Indicator />
             </Tabs.Tab>
           </Tabs.List>
@@ -483,8 +518,9 @@ export default function EmployeeDashboardPage() {
         ================================================================ */}
         <Tabs.Panel id="inquiries" className="space-y-4">
           {quoteSavedToast && (
-            <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-xs font-semibold text-emerald-500">
-              {quoteSavedToast}
+            <div className="flex items-center gap-2 rounded-lg border border-separator bg-surface px-4 py-3 text-xs font-medium text-foreground">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              <span>{quoteSavedToast}</span>
             </div>
           )}
 
@@ -502,9 +538,9 @@ export default function EmployeeDashboardPage() {
                     key={f.id}
                     type="button"
                     onClick={() => setQuoteFilter(f.id)}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                       quoteFilter === f.id
-                        ? "bg-accent text-accent-foreground"
+                        ? "bg-foreground text-background"
                         : "border border-separator bg-surface text-muted hover:text-foreground"
                     }`}
                   >
@@ -513,10 +549,10 @@ export default function EmployeeDashboardPage() {
                 ))}
               </div>
 
-              <div className="space-y-2.5 max-h-[620px] overflow-y-auto pr-1">
+              <div className="max-h-[620px] space-y-2 overflow-y-auto pr-1">
                 {filteredInquiries.length === 0 ? (
-                  <Card className="border border-dashed border-separator bg-surface p-8 text-center text-xs text-muted">
-                    No inquiries found in this view yet.
+                  <Card className="border border-separator bg-surface p-8 text-center text-xs text-muted">
+                    No quotation inquiries in this filter.
                   </Card>
                 ) : (
                   filteredInquiries.map((inq) => {
@@ -525,14 +561,14 @@ export default function EmployeeDashboardPage() {
                       <Card
                         key={inq.id}
                         onClick={() => setSelectedInquiryId(inq.id)}
-                        className={`cursor-pointer border p-4 transition ${
+                        className={`cursor-pointer border p-4 transition-colors tabular-nums ${
                           active
-                            ? "border-accent bg-accent/8"
-                            : "border-separator bg-surface hover:border-accent/40"
+                            ? "border-foreground/40 bg-surface-secondary"
+                            : "border-separator bg-surface hover:bg-surface-secondary/50"
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <span className="font-mono text-xs font-bold text-accent">
+                          <span className="font-mono text-xs font-semibold text-foreground">
                             {inq.referenceNumber}
                           </span>
                           <Chip
@@ -541,23 +577,23 @@ export default function EmployeeDashboardPage() {
                               inq.status === "pending_review"
                                 ? "warning"
                                 : inq.status === "quoted"
-                                ? "success"
-                                : "accent"
+                                  ? "success"
+                                  : "default"
                             }
                             variant="soft"
                           >
                             {inq.status.replace(/_/g, " ")}
                           </Chip>
                         </div>
-                        <div className="mt-1.5 text-sm font-bold text-foreground line-clamp-1">
+                        <div className="mt-1.5 line-clamp-1 text-sm font-medium text-foreground">
                           {inq.subject}
                         </div>
                         <div className="mt-1 text-xs text-muted">
-                          {inq.customerName} • Qty:{" "}
-                          {inq.quantity.toLocaleString()} • {inq.selectedSize}
+                          {inq.customerName} · {inq.quantity.toLocaleString()}{" "}
+                          units · {inq.selectedSize}
                         </div>
                         {inq.quotedTotal != null && (
-                          <div className="mt-1.5 text-xs font-bold text-emerald-500">
+                          <div className="mt-1.5 font-mono text-xs font-semibold text-foreground">
                             Quoted: {formatCurrency(inq.quotedTotal)}
                           </div>
                         )}
@@ -574,18 +610,15 @@ export default function EmployeeDashboardPage() {
                 <Card className="border border-separator bg-surface p-6 space-y-5">
                   <div className="flex flex-wrap items-start justify-between gap-3 border-b border-separator pb-4">
                     <div>
-                      <div className="flex items-center gap-2">
-                        <FileSpreadsheet className="h-4 w-4 text-accent" />
-                        <span className="font-mono text-lg font-extrabold text-accent">
-                          {selectedInquiry.referenceNumber}
-                        </span>
-                      </div>
-                      <h2 className="mt-1 text-lg font-bold text-foreground">
+                      <span className="font-mono text-base font-semibold text-foreground">
+                        {selectedInquiry.referenceNumber}
+                      </span>
+                      <h2 className="mt-1 text-base font-semibold text-foreground">
                         {selectedInquiry.subject}
                       </h2>
-                      <p className="text-xs text-muted">
+                      <p className="mt-0.5 text-xs text-muted">
                         {selectedInquiry.customerName} (
-                        {selectedInquiry.customerEmail} •{" "}
+                        {selectedInquiry.customerEmail} ·{" "}
                         {selectedInquiry.customerPhone})
                         {selectedInquiry.companyName
                           ? ` — ${selectedInquiry.companyName}`
@@ -602,79 +635,84 @@ export default function EmployeeDashboardPage() {
                             handleConvertInquiry(selectedInquiry.id)
                           }
                         >
-                          <ShoppingBag className="h-4 w-4" />
                           Convert to Order
                         </Button>
                       )}
                   </div>
 
                   {/* Specs Summary */}
-                  <div className="grid gap-3 rounded-xl bg-surface-secondary/60 p-4 text-xs sm:grid-cols-2">
+                  <div className="grid gap-3 rounded-lg border border-separator bg-background p-4 text-xs sm:grid-cols-2 tabular-nums">
                     <div>
-                      <span className="text-muted">Product:</span>{" "}
-                      <strong className="text-foreground">
+                      <span className="text-muted">Product: </span>
+                      <span className="font-medium text-foreground">
                         {selectedInquiry.productName}
-                      </strong>
+                      </span>
                     </div>
                     <div>
-                      <span className="text-muted">Selected Size:</span>{" "}
-                      <strong className="text-foreground">
+                      <span className="text-muted">Size: </span>
+                      <span className="font-medium text-foreground">
                         {selectedInquiry.selectedSize}
-                      </strong>
+                      </span>
                     </div>
                     <div>
-                      <span className="text-muted">Material:</span>{" "}
-                      <strong className="text-foreground">
+                      <span className="text-muted">Substrate: </span>
+                      <span className="font-medium text-foreground">
                         {selectedInquiry.material}
-                      </strong>
+                      </span>
                     </div>
                     <div>
-                      <span className="text-muted">Finish:</span>{" "}
-                      <strong className="text-foreground">
+                      <span className="text-muted">Finishing: </span>
+                      <span className="font-medium text-foreground">
                         {selectedInquiry.finish}
-                      </strong>
+                      </span>
                     </div>
                     <div>
-                      <span className="text-muted">Quantity:</span>{" "}
-                      <strong className="text-foreground">
+                      <span className="text-muted">Quantity: </span>
+                      <span className="font-mono font-medium text-foreground">
                         {selectedInquiry.quantity.toLocaleString()}
-                      </strong>
+                      </span>
                     </div>
                     {selectedInquiry.targetDate && (
                       <div>
-                        <span className="text-muted">Target Deadline:</span>{" "}
-                        <strong className="text-amber-500">
+                        <span className="text-muted">Target Date: </span>
+                        <span className="font-mono font-medium text-foreground">
                           {selectedInquiry.targetDate}
-                        </strong>
+                        </span>
                       </div>
                     )}
                     {selectedInquiry.customDimensions && (
                       <div className="sm:col-span-2">
-                        <span className="text-muted">Custom Dimensions:</span>{" "}
-                        <strong className="text-foreground">
+                        <span className="text-muted">Custom Trim: </span>
+                        <span className="font-mono text-foreground">
                           {selectedInquiry.customDimensions}
-                        </strong>
+                        </span>
                       </div>
                     )}
                     {selectedInquiry.artworkUrl && (
                       <div className="sm:col-span-2 flex items-center gap-1.5">
-                        <span className="text-muted">Artwork File:</span>
-                        <a
-                          href={selectedInquiry.artworkUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1 font-medium text-accent hover:underline"
-                        >
-                          Open Customer Artwork Link
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
+                        <span className="text-muted">Artwork URL:</span>
+                        {safeArtworkHref ? (
+                          <a
+                            href={safeArtworkHref}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 font-medium text-accent hover:underline"
+                          >
+                            Open Verified HTTPS Link
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        ) : (
+                          <span className="text-danger">
+                            Blocked non-HTTPS link
+                          </span>
+                        )}
                       </div>
                     )}
                     {selectedInquiry.notes && (
-                      <div className="sm:col-span-2 rounded-lg bg-surface p-2.5 text-muted">
-                        <strong className="text-foreground">
-                          Customer Notes:
-                        </strong>{" "}
+                      <div className="sm:col-span-2 rounded-md border border-separator bg-surface p-2.5 text-muted">
+                        <span className="font-medium text-foreground">
+                          Client Notes:{" "}
+                        </span>
                         {selectedInquiry.notes}
                       </div>
                     )}
@@ -682,14 +720,14 @@ export default function EmployeeDashboardPage() {
 
                   {/* Estimator Pricing Form */}
                   <form onSubmit={handleSendQuoteSubmit} className="space-y-4">
-                    <h3 className="text-sm font-bold text-foreground">
-                      Prepare & Send Formal Quotation
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">
+                      Issue Formal Quotation
                     </h3>
 
-                    <div className="grid gap-3 sm:grid-cols-4">
+                    <div className="grid gap-3 sm:grid-cols-4 tabular-nums">
                       <div>
                         <label className="mb-1 block text-xs font-medium text-muted">
-                          Unit Price ({settings.currencySymbol})
+                          Unit Rate ({settings.currencySymbol})
                         </label>
                         <input
                           type="number"
@@ -702,13 +740,13 @@ export default function EmployeeDashboardPage() {
                               Number.parseFloat(e.target.value || "0")
                             )
                           }
-                          className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm font-semibold text-foreground"
+                          className="h-9 w-full rounded-lg border border-separator bg-background px-3 font-mono text-sm font-medium text-foreground outline-none focus:border-accent"
                         />
                       </div>
 
                       <div>
                         <label className="mb-1 block text-xs font-medium text-muted">
-                          Setup / Die Fee
+                          Setup / Tooling
                         </label>
                         <input
                           type="number"
@@ -720,7 +758,7 @@ export default function EmployeeDashboardPage() {
                               Number.parseFloat(e.target.value || "0")
                             )
                           }
-                          className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
+                          className="h-9 w-full rounded-lg border border-separator bg-background px-3 font-mono text-sm text-foreground outline-none focus:border-accent"
                         />
                       </div>
 
@@ -738,7 +776,7 @@ export default function EmployeeDashboardPage() {
                               Number.parseFloat(e.target.value || "0")
                             )
                           }
-                          className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
+                          className="h-9 w-full rounded-lg border border-separator bg-background px-3 font-mono text-sm text-foreground outline-none focus:border-accent"
                         />
                       </div>
 
@@ -750,44 +788,43 @@ export default function EmployeeDashboardPage() {
                           type="date"
                           value={quoteValidUntil}
                           onChange={(e) => setQuoteValidUntil(e.target.value)}
-                          className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
+                          className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
                         />
                       </div>
                     </div>
 
                     <div>
                       <label className="mb-1 block text-xs font-medium text-muted">
-                        Estimator Remarks / Breakdown Note to Customer
+                        Estimator Breakdown & Terms
                       </label>
                       <textarea
                         rows={2}
                         value={quoteRemarks}
                         onChange={(e) => setQuoteRemarks(e.target.value)}
-                        placeholder="e.g., Includes digital proof, die-line setup, and 500+ bulk discount tier."
-                        className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-sm text-foreground"
+                        placeholder="Include proof schedule, tooling details, or volume break notes..."
+                        className="w-full rounded-lg border border-separator bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
                       />
                     </div>
 
-                    <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-accent/30 bg-accent/5 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-separator bg-surface-secondary/50 p-4 tabular-nums">
                       <div>
                         <div className="text-xs text-muted">
-                          Calculated Net Quotation ({selectedInquiry.quantity}×{" "}
+                          Net Quotation ({selectedInquiry.quantity}×{" "}
                           {formatCurrency(quoteUnitPrice)} + Setup − Discount)
                         </div>
-                        <div className="text-2xl font-extrabold text-accent">
+                        <div className="mt-0.5 font-mono text-xl font-semibold text-foreground">
                           {formatCurrency(computedQuoteTotal)}
                         </div>
                       </div>
                       <Button type="submit" variant="primary">
-                        <Send className="h-4 w-4" />
-                        Publish Quotation to Reference #
+                        Publish Quotation
                       </Button>
                     </div>
                   </form>
                 </Card>
               ) : (
                 <Card className="border border-separator bg-surface p-10 text-center text-sm text-muted">
-                  Select an inquiry on the left to prepare a quotation.
+                  Select an inquiry on the left to prepare an estimate.
                 </Card>
               )}
             </div>
@@ -798,26 +835,24 @@ export default function EmployeeDashboardPage() {
             TAB 2: TAKE ORDERS (POS) & PRODUCTION MANAGEMENT
         ================================================================ */}
         <Tabs.Panel id="orders" className="space-y-8">
-          {/* WALK-IN / PHONE COUNTER ORDER TAKING */}
+          {/* COUNTER ORDER BUILDER */}
           <Card className="border border-separator bg-surface p-6 space-y-5">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-separator pb-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-separator pb-4">
               <div>
-                <h2 className="text-lg font-bold text-foreground">
-                  Take Customer Order (Walk-In / Phone Counter POS)
+                <h2 className="text-base font-semibold text-foreground">
+                  Counter POS Order Entry
                 </h2>
                 <p className="text-xs text-muted">
-                  Build a multi-item print order using live per-size pricing and
-                  issue an instant{" "}
-                  <code className="font-mono">{settings.orderPrefix}-...</code>{" "}
-                  Reference Slip.
+                  Compose multi-line walk-in or telephone orders with automatic
+                  per-size calculation and reference generation.
                 </p>
               </div>
               {createdWalkInRef && (
-                <div className="flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-2 text-xs">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                <div className="flex items-center gap-2 rounded-lg border border-separator bg-surface-secondary px-3.5 py-2 text-xs">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                   <span>
-                    Created Ref:{" "}
-                    <strong className="font-mono text-emerald-500">
+                    Issued:{" "}
+                    <strong className="font-mono text-foreground">
                       {createdWalkInRef}
                     </strong>
                   </span>
@@ -826,35 +861,36 @@ export default function EmployeeDashboardPage() {
                     onClick={() =>
                       navigator.clipboard.writeText(createdWalkInRef)
                     }
-                    className="rounded bg-surface px-2 py-0.5 font-medium hover:text-accent"
+                    className="rounded border border-separator bg-surface px-2 py-0.5 text-[11px] font-medium hover:text-accent"
                   >
-                    <Copy className="inline h-3 w-3 mr-1" />
+                    <Copy className="mr-1 inline h-3 w-3" />
                     Copy
                   </button>
                 </div>
               )}
             </div>
 
-            {/* Line Item Selector */}
             {activeProducts.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-separator bg-surface-secondary/40 p-6 text-center text-xs text-muted">
-                No active catalog products yet. Create products and size pricing
-                in{" "}
-                <Link href="/admin" className="font-semibold text-accent underline">
-                  Super Admin
+              <div className="rounded-lg border border-separator bg-background p-6 text-center text-xs text-muted">
+                No active catalog products configured. Add products in{" "}
+                <Link
+                  href="/admin"
+                  className="font-medium text-accent hover:underline"
+                >
+                  Administration
                 </Link>{" "}
-                to enable counter POS order taking.
+                to enable counter POS order entry.
               </div>
             ) : (
-              <div className="grid gap-3 rounded-xl bg-surface-secondary/50 p-4 sm:grid-cols-12 items-end">
+              <div className="grid items-end gap-3 rounded-lg border border-separator bg-background p-4 sm:grid-cols-12">
                 <div className="sm:col-span-3">
                   <label className="mb-1 block text-xs font-medium text-muted">
-                    Product
+                    Product Line
                   </label>
                   <select
                     value={posProductId}
                     onChange={(e) => setPosProductId(e.target.value)}
-                    className="w-full rounded-xl border border-separator bg-surface px-3 py-2 text-xs text-foreground"
+                    className="h-9 w-full rounded-lg border border-separator bg-surface px-2.5 text-xs text-foreground outline-none focus:border-accent"
                   >
                     {activeProducts.map((p) => (
                       <option key={p.id} value={p.id}>
@@ -866,12 +902,12 @@ export default function EmployeeDashboardPage() {
 
                 <div className="sm:col-span-3">
                   <label className="mb-1 block text-xs font-medium text-muted">
-                    Size (Price Per Size)
+                    Size Schedule
                   </label>
                   <select
                     value={posSizeId}
                     onChange={(e) => setPosSizeId(e.target.value)}
-                    className="w-full rounded-xl border border-separator bg-surface px-3 py-2 text-xs text-foreground"
+                    className="h-9 w-full rounded-lg border border-separator bg-surface px-2.5 text-xs text-foreground outline-none focus:border-accent"
                   >
                     {posProduct?.sizes.map((sz) => (
                       <option key={sz.id} value={sz.id}>
@@ -883,12 +919,12 @@ export default function EmployeeDashboardPage() {
 
                 <div className="sm:col-span-2">
                   <label className="mb-1 block text-xs font-medium text-muted">
-                    Material
+                    Substrate
                   </label>
                   <select
                     value={posMaterial}
                     onChange={(e) => setPosMaterial(e.target.value)}
-                    className="w-full rounded-xl border border-separator bg-surface px-3 py-2 text-xs text-foreground"
+                    className="h-9 w-full rounded-lg border border-separator bg-surface px-2.5 text-xs text-foreground outline-none focus:border-accent"
                   >
                     {posProduct?.materials.map((m) => (
                       <option key={m.name} value={m.name}>
@@ -905,7 +941,7 @@ export default function EmployeeDashboardPage() {
                   <select
                     value={posFinish}
                     onChange={(e) => setPosFinish(e.target.value)}
-                    className="w-full rounded-xl border border-separator bg-surface px-3 py-2 text-xs text-foreground"
+                    className="h-9 w-full rounded-lg border border-separator bg-surface px-2.5 text-xs text-foreground outline-none focus:border-accent"
                   >
                     {posProduct?.finishes.map((f) => (
                       <option key={f.name} value={f.name}>
@@ -928,7 +964,7 @@ export default function EmployeeDashboardPage() {
                         Math.max(1, Number.parseInt(e.target.value || "1", 10))
                       )
                     }
-                    className="w-full rounded-xl border border-separator bg-surface px-2.5 py-2 text-xs font-bold text-foreground"
+                    className="h-9 w-full rounded-lg border border-separator bg-surface px-2.5 font-mono text-xs font-medium text-foreground outline-none focus:border-accent tabular-nums"
                   />
                 </div>
 
@@ -937,6 +973,7 @@ export default function EmployeeDashboardPage() {
                     size="sm"
                     variant="primary"
                     fullWidth
+                    className="h-9"
                     isDisabled={!posProduct}
                     onPress={handleAddPosItem}
                   >
@@ -947,25 +984,25 @@ export default function EmployeeDashboardPage() {
               </div>
             )}
 
-            {/* Draft Items + Customer Checkout */}
+            {/* Draft Items + Checkout */}
             {draftItems.length > 0 && (
               <form onSubmit={handleCreateWalkInOrder} className="space-y-4">
-                <div className="divide-y divide-separator rounded-xl border border-separator">
+                <div className="divide-y divide-separator rounded-lg border border-separator tabular-nums">
                   {draftItems.map((item) => (
                     <div
                       key={item.id}
                       className="flex items-center justify-between px-4 py-2.5 text-xs"
                     >
                       <div>
-                        <span className="font-bold text-foreground">
+                        <span className="font-medium text-foreground">
                           {item.quantity}× {item.productName} — {item.sizeLabel}
                         </span>
                         <span className="ml-2 text-muted">
-                          ({item.material} • {item.finish})
+                          ({item.material} · {item.finish})
                         </span>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="font-bold text-foreground">
+                        <span className="font-mono font-medium text-foreground">
                           {formatCurrency(item.lineTotal)}
                         </span>
                         <button
@@ -975,10 +1012,10 @@ export default function EmployeeDashboardPage() {
                               prev.filter((x) => x.id !== item.id)
                             )
                           }
-                          className="text-rose-500 hover:opacity-80"
-                          aria-label="Remove item"
+                          className="text-muted hover:text-danger"
+                          aria-label="Remove line item"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
                     </div>
@@ -990,29 +1027,29 @@ export default function EmployeeDashboardPage() {
                     required
                     value={posCustomerName}
                     onChange={(e) => setPosCustomerName(e.target.value)}
-                    placeholder="Customer Full Name *"
-                    className="rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-xs text-foreground"
+                    placeholder="Client Full Name *"
+                    className="h-9 rounded-lg border border-separator bg-background px-3 text-xs text-foreground outline-none focus:border-accent"
                   />
                   <input
                     required
                     value={posCustomerPhone}
                     onChange={(e) => setPosCustomerPhone(e.target.value)}
-                    placeholder="Mobile Number *"
-                    className="rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-xs text-foreground"
+                    placeholder="Telephone / Mobile *"
+                    className="h-9 rounded-lg border border-separator bg-background px-3 text-xs text-foreground outline-none focus:border-accent"
                   />
                   <input
                     type="email"
                     value={posCustomerEmail}
                     onChange={(e) => setPosCustomerEmail(e.target.value)}
-                    placeholder="Customer Email (Optional)"
-                    className="rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-xs text-foreground"
+                    placeholder="Client Email (Optional)"
+                    className="h-9 rounded-lg border border-separator bg-background px-3 text-xs text-foreground outline-none focus:border-accent"
                   />
                   <input
                     type="date"
                     value={posEstDate}
                     onChange={(e) => setPosEstDate(e.target.value)}
-                    className="rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-xs text-foreground"
-                    title="Estimated completion date"
+                    className="h-9 rounded-lg border border-separator bg-background px-3 text-xs text-foreground outline-none focus:border-accent"
+                    title="Scheduled completion date"
                   />
                 </div>
 
@@ -1026,24 +1063,24 @@ export default function EmployeeDashboardPage() {
                       onChange={(e) =>
                         setPosPaymentStatus(e.target.value as PaymentStatus)
                       }
-                      className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-xs text-foreground"
+                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-xs text-foreground outline-none focus:border-accent"
                     >
                       <option value="paid">Paid in Full</option>
                       <option value="downpayment_paid">50% Downpayment</option>
-                      <option value="unpaid">Unpaid / Bill Later</option>
+                      <option value="unpaid">Unpaid / Invoice</option>
                     </select>
                   </div>
 
                   <div>
                     <label className="mb-1 block text-[11px] text-muted">
-                      Payment Method
+                      Settlement Channel
                     </label>
                     <select
                       value={posPaymentMethod}
                       onChange={(e) => setPosPaymentMethod(e.target.value)}
-                      className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-xs text-foreground"
+                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-xs text-foreground outline-none focus:border-accent"
                     >
-                      <option value="cash">Cash Counter</option>
+                      <option value="cash">Counter Cash</option>
                       <option value="gcash_ewallet">GCash / Maya</option>
                       <option value="bank_transfer">Bank Transfer</option>
                       <option value="card">Card Terminal</option>
@@ -1063,22 +1100,22 @@ export default function EmployeeDashboardPage() {
                           Number.parseFloat(e.target.value || "0")
                         )
                       }
-                      className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-xs text-foreground"
+                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 font-mono text-xs text-foreground outline-none focus:border-accent tabular-nums"
                     />
                   </div>
 
                   <div>
                     <label className="mb-1 block text-[11px] text-muted">
-                      Release Mode
+                      Fulfillment
                     </label>
                     <select
                       value={posDelivery}
                       onChange={(e) =>
                         setPosDelivery(e.target.value as "pickup" | "courier")
                       }
-                      className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-xs text-foreground"
+                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-xs text-foreground outline-none focus:border-accent"
                     >
-                      <option value="pickup">Counter Pickup</option>
+                      <option value="pickup">Studio Pickup</option>
                       <option value="courier">Courier Dispatch</option>
                     </select>
                   </div>
@@ -1087,128 +1124,122 @@ export default function EmployeeDashboardPage() {
                 <input
                   value={posNotes}
                   onChange={(e) => setPosNotes(e.target.value)}
-                  placeholder="Job ticket notes (file name, lamination instruction, Pantone code)..."
-                  className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2 text-xs text-foreground"
+                  placeholder="Production job ticket notes (file reference, Pantone, finishing instructions)..."
+                  className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-xs text-foreground outline-none focus:border-accent"
                 />
 
-                <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-accent/30 bg-accent/5 p-4">
-                  <div className="text-xs space-y-0.5">
+                <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-separator bg-surface-secondary/50 p-4 tabular-nums">
+                  <div className="space-y-0.5 text-xs">
                     <div className="text-muted">
-                      Subtotal: {formatCurrency(posSubtotal)} • VAT (
+                      Subtotal: {formatCurrency(posSubtotal)} · VAT (
                       {settings.taxRate}%): {formatCurrency(posTax)}
                     </div>
-                    <div className="text-xl font-extrabold text-accent">
-                      Grand Total: {formatCurrency(posGrandTotal)}
+                    <div className="font-mono text-lg font-semibold text-foreground">
+                      Total: {formatCurrency(posGrandTotal)}
                     </div>
                   </div>
                   <Button type="submit" variant="primary">
-                    <Printer className="h-4 w-4" />
-                    Issue Order & Generate Reference #
+                    Issue Production Order
                   </Button>
                 </div>
               </form>
             )}
           </Card>
 
-          {/* LIVE PRODUCTION ORDERS QUEUE */}
+          {/* PRODUCTION ORDERS QUEUE */}
           <div className="space-y-3">
-            <h2 className="text-lg font-bold text-foreground">
-              Active Print Floor Orders ({orders.length})
+            <h2 className="text-base font-semibold text-foreground">
+              Production Schedule ({orders.length})
             </h2>
             {orders.length === 0 ? (
-              <Card className="border border-dashed border-separator bg-surface p-8 text-center text-xs text-muted">
-                No production orders have been placed yet.
+              <Card className="border border-separator bg-surface p-8 text-center text-xs text-muted">
+                No production orders logged yet.
               </Card>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {orders.map((ord) => (
-                <Card
-                  key={ord.id}
-                  className="border border-separator bg-surface p-5 space-y-3"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <Package className="h-4 w-4 text-accent" />
-                        <span className="font-mono text-base font-extrabold text-accent">
-                          {ord.referenceNumber}
-                        </span>
-                        <Chip size="sm" color="default" variant="secondary">
-                          {ord.orderSource.replace("_", " ")}
-                        </Chip>
-                      </div>
-                      <div className="mt-0.5 text-xs text-muted">
-                        <strong className="text-foreground">
-                          {ord.customerName}
-                        </strong>{" "}
-                        ({ord.customerPhone}) •{" "}
-                        {ord.items
-                          .map(
-                            (i) =>
-                              `${i.quantity}× ${i.productName} [${i.sizeLabel}]`
-                          )
-                          .join(", ")}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2.5 text-xs">
-                      <div>
-                        <label className="mr-1.5 text-muted">Stage:</label>
-                        <select
-                          value={ord.productionStatus}
-                          onChange={(e) =>
-                            updateOrderStatus(ord.id, {
-                              productionStatus: e.target
-                                .value as ProductionStatus,
-                            })
-                          }
-                          className="rounded-lg border border-separator bg-surface-secondary px-2.5 py-1.5 font-semibold text-foreground"
-                        >
-                          <option value="received">1. Received</option>
-                          <option value="prepress_check">
-                            2. Pre-Press Check
-                          </option>
-                          <option value="printing">3. Printing</option>
-                          <option value="finishing">4. Finishing</option>
-                          <option value="ready_for_pickup">
-                            5. Ready for Pickup
-                          </option>
-                          <option value="completed">6. Completed</option>
-                          <option value="cancelled">Cancelled</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="mr-1.5 text-muted">Payment:</label>
-                        <select
-                          value={ord.paymentStatus}
-                          onChange={(e) => {
-                            const nextPay = e.target.value as PaymentStatus;
-                            updateOrderStatus(ord.id, {
-                              paymentStatus: nextPay,
-                              amountPaid:
-                                nextPay === "paid"
-                                  ? ord.totalAmount
-                                  : ord.amountPaid,
-                            });
-                          }}
-                          className="rounded-lg border border-separator bg-surface-secondary px-2.5 py-1.5 font-semibold text-foreground"
-                        >
-                          <option value="unpaid">Unpaid</option>
-                          <option value="downpayment_paid">50% DP Paid</option>
-                          <option value="paid">Paid Full</option>
-                        </select>
-                      </div>
-
-                      <div className="text-right pl-2">
-                        <div className="font-extrabold text-foreground">
-                          {formatCurrency(ord.totalAmount)}
+                  <Card
+                    key={ord.id}
+                    className="border border-separator bg-surface p-5 tabular-nums"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-sm font-semibold text-foreground">
+                            {ord.referenceNumber}
+                          </span>
+                          <Chip size="sm" color="default" variant="secondary">
+                            {ord.orderSource.replace(/_/g, " ")}
+                          </Chip>
                         </div>
-                        <div className="text-[11px] text-muted">
-                          Paid: {formatCurrency(ord.amountPaid)}
+                        <div className="text-xs text-muted">
+                          <span className="font-medium text-foreground">
+                            {ord.customerName}
+                          </span>{" "}
+                          ({ord.customerPhone}) ·{" "}
+                          {ord.items
+                            .map(
+                              (i) =>
+                                `${i.quantity}× ${i.productName} [${i.sizeLabel}]`
+                            )
+                            .join(", ")}
                         </div>
                       </div>
-                    </div>
+
+                      <div className="flex flex-wrap items-center gap-3 text-xs">
+                        <div>
+                          <label className="mr-1.5 text-muted">Stage:</label>
+                          <select
+                            value={ord.productionStatus}
+                            onChange={(e) =>
+                              updateOrderStatus(ord.id, {
+                                productionStatus: e.target
+                                  .value as ProductionStatus,
+                              })
+                            }
+                            className="h-8 rounded-md border border-separator bg-background px-2.5 font-medium text-foreground outline-none focus:border-accent"
+                          >
+                            <option value="received">01 Received</option>
+                            <option value="prepress_check">02 Pre-Press</option>
+                            <option value="printing">03 Printing</option>
+                            <option value="finishing">04 Finishing</option>
+                            <option value="ready_for_pickup">05 Ready</option>
+                            <option value="completed">06 Completed</option>
+                            <option value="cancelled">Cancelled</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="mr-1.5 text-muted">Payment:</label>
+                          <select
+                            value={ord.paymentStatus}
+                            onChange={(e) => {
+                              const nextPay = e.target.value as PaymentStatus;
+                              updateOrderStatus(ord.id, {
+                                paymentStatus: nextPay,
+                                amountPaid:
+                                  nextPay === "paid"
+                                    ? ord.totalAmount
+                                    : ord.amountPaid,
+                              });
+                            }}
+                            className="h-8 rounded-md border border-separator bg-background px-2.5 font-medium text-foreground outline-none focus:border-accent"
+                          >
+                            <option value="unpaid">Unpaid</option>
+                            <option value="downpayment_paid">50% DP</option>
+                            <option value="paid">Paid</option>
+                          </select>
+                        </div>
+
+                        <div className="pl-2 text-right">
+                          <div className="font-mono font-semibold text-foreground">
+                            {formatCurrency(ord.totalAmount)}
+                          </div>
+                          <div className="font-mono text-[11px] text-muted">
+                            Paid: {formatCurrency(ord.amountPaid)}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </Card>
                 ))}
@@ -1226,8 +1257,8 @@ export default function EmployeeDashboardPage() {
             <div className="space-y-3 lg:col-span-4">
               <Card className="border border-separator bg-surface p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <div className="text-sm font-bold text-foreground">
-                    Live Ticket Queue ({queuedTickets.length})
+                  <div className="text-sm font-semibold text-foreground tabular-nums">
+                    Queue ({queuedTickets.length})
                   </div>
                   <Button
                     size="sm"
@@ -1235,21 +1266,20 @@ export default function EmployeeDashboardPage() {
                     isDisabled={queuedTickets.length === 0}
                     onPress={handleClaimNext}
                   >
-                    <Headset className="h-3.5 w-3.5" />
                     Claim Next
                   </Button>
                 </div>
 
-                <div className="flex rounded-xl bg-surface-secondary p-1 text-xs">
+                <div className="grid grid-cols-3 gap-1 rounded-lg border border-separator bg-surface-secondary p-1 text-xs tabular-nums">
                   {(["queued", "active", "resolved"] as const).map((tab) => (
                     <button
                       key={tab}
                       type="button"
                       onClick={() => setTicketViewFilter(tab)}
-                      className={`flex-1 rounded-lg py-1.5 font-semibold capitalize transition ${
+                      className={`rounded-md py-1.5 font-medium capitalize transition-colors ${
                         ticketViewFilter === tab
-                          ? "bg-surface text-foreground shadow-xs"
-                          : "text-muted"
+                          ? "bg-surface text-foreground shadow-2xs"
+                          : "text-muted hover:text-foreground"
                       }`}
                     >
                       {tab} (
@@ -1265,10 +1295,10 @@ export default function EmployeeDashboardPage() {
                   ))}
                 </div>
 
-                <div className="space-y-2 max-h-[470px] overflow-y-auto">
+                <div className="max-h-[470px] space-y-2 overflow-y-auto">
                   {filteredTicketsList.length === 0 ? (
                     <p className="py-8 text-center text-xs text-muted">
-                      No {ticketViewFilter} tickets right now.
+                      No {ticketViewFilter} tickets.
                     </p>
                   ) : (
                     filteredTicketsList.map((t) => {
@@ -1278,17 +1308,17 @@ export default function EmployeeDashboardPage() {
                         <div
                           key={t.id}
                           onClick={() => setSelectedTicketId(t.id)}
-                          className={`cursor-pointer rounded-xl border p-3 transition ${
+                          className={`cursor-pointer rounded-lg border p-3 transition-colors ${
                             isSel
-                              ? "border-accent bg-accent/10"
-                              : "border-separator bg-surface-secondary/40 hover:border-accent/40"
+                              ? "border-foreground/40 bg-surface-secondary"
+                              : "border-separator bg-background hover:bg-surface-secondary/50"
                           }`}
                         >
-                          <div className="flex items-center justify-between">
-                            <span className="font-mono text-xs font-bold text-accent">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-mono text-xs font-semibold text-foreground">
                               {t.ticketNumber}
                             </span>
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1 tabular-nums">
                               {t.status === "queued" && (
                                 <Chip size="sm" color="warning" variant="soft">
                                   #{pos}
@@ -1300,8 +1330,8 @@ export default function EmployeeDashboardPage() {
                                   t.priority === "urgent"
                                     ? "danger"
                                     : t.priority === "high"
-                                    ? "warning"
-                                    : "default"
+                                      ? "warning"
+                                      : "default"
                                 }
                                 variant="soft"
                               >
@@ -1309,11 +1339,11 @@ export default function EmployeeDashboardPage() {
                               </Chip>
                             </div>
                           </div>
-                          <div className="mt-1 text-xs font-bold text-foreground">
+                          <div className="mt-1 text-xs font-medium text-foreground">
                             {t.customerName} — {t.topic}
                           </div>
                           {t.linkedReference && (
-                            <div className="font-mono text-[11px] text-muted">
+                            <div className="mt-0.5 font-mono text-[11px] text-muted">
                               Ref: {t.linkedReference}
                             </div>
                           )}
@@ -1325,7 +1355,7 @@ export default function EmployeeDashboardPage() {
               </Card>
             </div>
 
-            {/* Active Conversation & Ticket Controls */}
+            {/* Active Conversation */}
             <div className="lg:col-span-8">
               {selectedTicket ? (
                 <Card className="flex h-[580px] flex-col overflow-hidden border border-separator bg-surface p-0">
@@ -1333,23 +1363,23 @@ export default function EmployeeDashboardPage() {
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-separator bg-surface-secondary/60 px-5 py-3.5">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-sm font-extrabold text-accent">
+                        <span className="font-mono text-sm font-semibold text-foreground">
                           {selectedTicket.ticketNumber}
                         </span>
-                        <span className="text-sm font-bold text-foreground">
+                        <span className="text-sm font-medium text-foreground">
                           {selectedTicket.customerName}
                         </span>
                         <span className="text-xs text-muted">
                           ({selectedTicket.customerEmail})
                         </span>
                       </div>
-                      <div className="text-xs text-muted">
-                        Topic: {selectedTicket.topic}
+                      <div className="mt-0.5 text-xs text-muted">
+                        {selectedTicket.topic}
                         {selectedTicket.linkedReference
-                          ? ` • Linked Ref: ${selectedTicket.linkedReference}`
+                          ? ` · Ref: ${selectedTicket.linkedReference}`
                           : ""}
                         {selectedTicket.assignedEmployeeName
-                          ? ` • Claimed by ${selectedTicket.assignedEmployeeName}`
+                          ? ` · Assigned: ${selectedTicket.assignedEmployeeName}`
                           : ""}
                       </div>
                     </div>
@@ -1362,9 +1392,9 @@ export default function EmployeeDashboardPage() {
                             priority: e.target.value as TicketPriority,
                           })
                         }
-                        className="rounded-lg border border-separator bg-surface px-2.5 py-1 text-xs text-foreground"
+                        className="h-8 rounded-md border border-separator bg-surface px-2.5 text-xs text-foreground outline-none focus:border-accent"
                       >
-                        <option value="normal">Normal</option>
+                        <option value="normal">Standard</option>
                         <option value="high">High</option>
                         <option value="urgent">Urgent</option>
                       </select>
@@ -1375,7 +1405,7 @@ export default function EmployeeDashboardPage() {
                           variant="primary"
                           onPress={() => claimTicket(selectedTicket.id)}
                         >
-                          Accept Ticket
+                          Claim Ticket
                         </Button>
                       )}
 
@@ -1389,16 +1419,15 @@ export default function EmployeeDashboardPage() {
                             })
                           }
                         >
-                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                          Resolve
+                          Mark Resolved
                         </Button>
                       )}
                     </div>
                   </div>
 
-                  {/* Internal Staff Note Bar */}
-                  <div className="flex items-center gap-2 border-b border-separator bg-amber-500/5 px-4 py-2 text-xs">
-                    <span className="shrink-0 font-semibold text-amber-600 dark:text-amber-400">
+                  {/* Internal Staff Note Bar (Protected by RLS — never exposed via RPC to clients) */}
+                  <div className="flex items-center gap-2 border-b border-separator bg-background px-4 py-2 text-xs">
+                    <span className="shrink-0 font-medium text-muted">
                       Internal Note:
                     </span>
                     <input
@@ -1409,7 +1438,7 @@ export default function EmployeeDashboardPage() {
                           internalNotes: internalNoteDraft,
                         })
                       }
-                      placeholder="Add private staff handoff note (hidden from customer)..."
+                      placeholder="Private staff handoff note (restricted to staff)..."
                       className="flex-1 bg-transparent text-foreground outline-none placeholder:text-muted"
                     />
                   </div>
@@ -1421,7 +1450,7 @@ export default function EmployeeDashboardPage() {
                         return (
                           <div
                             key={m.id}
-                            className="mx-auto max-w-md rounded-full bg-surface-secondary px-4 py-1 text-center text-[11px] text-muted"
+                            className="mx-auto max-w-md rounded-md border border-separator bg-surface-secondary/50 px-3 py-1.5 text-center text-[11px] text-muted"
                           >
                             {m.message}
                           </div>
@@ -1439,10 +1468,10 @@ export default function EmployeeDashboardPage() {
                             {m.senderName} ({m.senderRole})
                           </span>
                           <div
-                            className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                            className={`max-w-[75%] rounded-xl px-3.5 py-2.5 text-sm leading-relaxed ${
                               isEmployee
-                                ? "bg-accent text-accent-foreground rounded-br-xs"
-                                : "border border-separator bg-surface-secondary text-foreground rounded-bl-xs"
+                                ? "bg-foreground text-background"
+                                : "border border-separator bg-surface-secondary text-foreground"
                             }`}
                           >
                             {m.message}
@@ -1462,14 +1491,14 @@ export default function EmployeeDashboardPage() {
                       onChange={(e) => setStaffReply(e.target.value)}
                       placeholder={
                         selectedTicket.status === "queued"
-                          ? "Reply to automatically claim this queued ticket..."
-                          : "Send message to customer..."
+                          ? "Reply to claim and respond..."
+                          : "Write message to client..."
                       }
-                      className="flex-1 rounded-xl border border-separator bg-surface-secondary/50 px-4 py-2.5 text-sm text-foreground outline-none focus:border-accent"
+                      className="h-10 flex-1 rounded-lg border border-separator bg-background px-3.5 text-sm text-foreground outline-none focus:border-accent"
                     />
-                    <Button type="submit" variant="primary">
+                    <Button type="submit" variant="primary" className="h-10">
                       <Send className="h-4 w-4" />
-                      Reply
+                      Send
                     </Button>
                   </form>
                 </Card>
@@ -1485,4 +1514,3 @@ export default function EmployeeDashboardPage() {
     </div>
   );
 }
-

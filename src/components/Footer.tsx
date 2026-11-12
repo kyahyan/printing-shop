@@ -1,93 +1,122 @@
 "use client";
 
 import Link from "next/link";
-import { Clock, Mail, MapPin, Phone, Printer } from "lucide-react";
 import { usePrintShop } from "@/context/PrintShopContext";
 
 export function Footer() {
   const { settings } = usePrintShop();
 
   return (
-    <footer className="mt-20 border-t border-separator bg-surface">
-      <div className="mx-auto max-w-7xl px-4 py-12">
-        <div className="grid gap-8 md:grid-cols-4">
-          <div className="space-y-3 md:col-span-2">
+    <footer className="mt-24 border-t border-separator bg-surface">
+      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6">
+        <div className="grid gap-10 md:grid-cols-12">
+          <div className="space-y-4 md:col-span-5">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-                <Printer className="h-4 w-4" />
+              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-foreground text-background font-mono text-xs font-semibold">
+                CJ
               </div>
-              <span className="text-lg font-bold text-foreground">
+              <span className="text-sm font-semibold tracking-tight text-foreground">
                 {settings.shopName}
               </span>
             </div>
-            <p className="max-w-md text-sm text-muted">{settings.tagline}</p>
-            <div className="rounded-xl border border-separator bg-surface-secondary/60 p-3 text-xs text-muted">
-              <strong className="text-foreground">Payment & Production Policy: </strong>
+            <p className="max-w-md text-sm leading-relaxed text-muted">
+              {settings.tagline}
+            </p>
+            <div className="rounded-lg border border-separator bg-surface-secondary/60 px-3.5 py-3 text-xs leading-relaxed text-muted">
+              <span className="font-medium text-foreground">
+                Terms & Production Policy:{" "}
+              </span>
               {settings.paymentInstructions}
             </div>
           </div>
 
-          <div className="space-y-2.5 text-sm">
-            <h4 className="font-semibold text-foreground">Customer Services</h4>
+          <div className="space-y-3 text-sm md:col-span-3">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted">
+              Services & Desk
+            </h4>
             <ul className="space-y-2 text-muted">
               <li>
-                <Link href="/products" className="hover:text-foreground">
-                  Products & Price-Per-Size Matrix
+                <Link
+                  href="/products"
+                  className="transition-colors hover:text-foreground"
+                >
+                  Catalog & Pricing Schedules
                 </Link>
               </li>
               <li>
-                <Link href="/quotations" className="hover:text-foreground">
-                  Request Custom Quotation
+                <Link
+                  href="/quotations"
+                  className="transition-colors hover:text-foreground"
+                >
+                  Formal Quotation Request
                 </Link>
               </li>
               <li>
-                <Link href="/track" className="hover:text-foreground">
-                  Track Order / Quote Reference #
+                <Link
+                  href="/track"
+                  className="transition-colors hover:text-foreground"
+                >
+                  Reference Lookup
                 </Link>
               </li>
               <li>
-                <Link href="/chat" className="hover:text-foreground">
-                  Live Chat Support Queue
+                <Link
+                  href="/chat"
+                  className="transition-colors hover:text-foreground"
+                >
+                  Client Support Queue
                 </Link>
               </li>
               <li>
-                <Link href="/staff/login" className="hover:text-foreground">
-                  Employee & Super Admin Login
+                <Link
+                  href="/staff/login"
+                  className="transition-colors hover:text-foreground"
+                >
+                  Staff & Administration
                 </Link>
               </li>
             </ul>
           </div>
 
-          <div className="space-y-2.5 text-sm">
-            <h4 className="font-semibold text-foreground">Print Shop Contact</h4>
-            <ul className="space-y-2 text-muted">
-              <li className="flex items-start gap-2">
-                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
-                <span>{settings.shopAddress}</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Phone className="h-4 w-4 shrink-0 text-accent" />
-                <span>{settings.contactPhone}</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Mail className="h-4 w-4 shrink-0 text-accent" />
-                <span>{settings.contactEmail}</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Clock className="h-4 w-4 shrink-0 text-accent" />
-                <span>{settings.businessHours}</span>
-              </li>
-            </ul>
+          <div className="space-y-3 text-sm md:col-span-4">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted">
+              Studio Information
+            </h4>
+            <dl className="space-y-2 text-sm">
+              <div className="flex justify-between gap-4 border-b border-separator/70 pb-1.5">
+                <dt className="text-muted">Location</dt>
+                <dd className="text-right text-foreground">
+                  {settings.shopAddress}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-4 border-b border-separator/70 pb-1.5">
+                <dt className="text-muted">Telephone</dt>
+                <dd className="text-right font-mono text-xs text-foreground tabular-nums">
+                  {settings.contactPhone}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-4 border-b border-separator/70 pb-1.5">
+                <dt className="text-muted">Email</dt>
+                <dd className="text-right text-foreground">
+                  {settings.contactEmail}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted">Hours</dt>
+                <dd className="text-right text-foreground">
+                  {settings.businessHours}
+                </dd>
+              </div>
+            </dl>
           </div>
         </div>
 
-        <div className="mt-8 flex flex-wrap items-center justify-between gap-2 border-t border-separator pt-6 text-xs text-muted">
+        <div className="mt-10 flex flex-wrap items-center justify-between gap-3 border-t border-separator pt-6 text-xs text-muted tabular-nums">
+          <span>© 2026 {settings.shopName}. All rights reserved.</span>
           <span>
-            © 2026 {settings.shopName}. All rights reserved.
-          </span>
-          <span>
-            Currency: {settings.currencyCode} ({settings.currencySymbol}) • Tax/VAT:{" "}
-            {settings.taxRate}%
+            Settlement Currency: {settings.currencyCode} ({settings.currencySymbol}) ·
+            Applicable VAT: {settings.taxRate}% · Quote Validity:{" "}
+            {settings.quotationValidityDays} days
           </span>
         </div>
       </div>

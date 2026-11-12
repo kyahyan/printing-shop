@@ -3,19 +3,13 @@
 import React, { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button, Card, Chip } from "@heroui/react";
-import {
-  Clock,
-  Headset,
-  MessageSquare,
-  Plus,
-  Send,
-  Ticket,
-  Users,
-} from "lucide-react";
+import { AlertCircle, Plus, Send } from "lucide-react";
 import { usePrintShop } from "@/context/PrintShopContext";
 import type { TicketPriority } from "@/types/printshop";
-
-const ACTIVE_TICKET_STORAGE = "clayjar_customer_active_ticket_v1";
+import {
+  getActiveStoredTicketId,
+  setActiveStoredTicketId,
+} from "@/lib/security";
 
 function ChatPageContent() {
   const searchParams = useSearchParams();
@@ -26,13 +20,17 @@ function ChatPageContent() {
     currentUser,
     users,
     tickets,
+    queueSummary,
     openChatTicket,
     sendChatMessage,
+    refreshTicketSession,
     getQueuePosition,
   } = usePrintShop();
 
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [creatingNew, setCreatingNew] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // New Ticket Form
   const [customerName, setCustomerName] = useState("");
@@ -56,7 +54,7 @@ function ChatPageContent() {
       setCreatingNew(false);
       return;
     }
-    const saved = localStorage.getItem(ACTIVE_TICKET_STORAGE);
+    const saved = getActiveStoredTicketId();
     if (saved) {
       setSelectedTicketId(saved);
     }
@@ -86,94 +84,149 @@ function ChatPageContent() {
     customerTickets[0] ??
     null;
 
-  const onlineSpecialists = users.filter(
-    (u) =>
-      (u.role === "employee" || u.role === "super_admin") &&
-      u.isActive &&
-      u.isOnline
-  );
-  const totalQueued = tickets.filter((t) => t.status === "queued").length;
+  // Poll live ticket updates for guest / customer sessions
+  useEffect(() => {
+    if (!activeTicket || creatingNew) return;
+    if (activeTicket.status === "closed") return;
+
+    void refreshTicketSession(activeTicket.id);
+    const interval = setInterval(() => {
+      void refreshTicketSession(activeTicket.id);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [activeTicket?.id, activeTicket?.status, creatingNew, refreshTicketSession]);
+
+  const isStaff =
+    currentUser?.role === "employee" || currentUser?.role === "super_admin";
+
+  const onlineCount = isStaff
+    ? users.filter(
+        (u) =>
+          (u.role === "employee" || u.role === "super_admin") &&
+          u.isActive &&
+          u.isOnline
+      ).length
+    : queueSummary.onlineSpecialists;
+
+  const totalQueued = isStaff
+    ? tickets.filter((t) => t.status === "queued").length
+    : queueSummary.queuedTickets;
 
   const handleOpenTicket = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!initialMessage.trim()) return;
-    const created = await openChatTicket({
-      customerName,
-      customerEmail,
-      topic,
-      linkedReference: linkedRef || undefined,
-      priority,
-      initialMessage,
-    });
-    setSelectedTicketId(created.id);
-    localStorage.setItem(ACTIVE_TICKET_STORAGE, created.id);
-    setCreatingNew(false);
-    setInitialMessage("");
+    if (!initialMessage.trim() || submitting) return;
+    setError(null);
+    setSubmitting(true);
+    try {
+      const created = await openChatTicket({
+        customerName,
+        customerEmail,
+        topic,
+        linkedReference: linkedRef || undefined,
+        priority,
+        initialMessage,
+      });
+      setSelectedTicketId(created.id);
+      setActiveStoredTicketId(created.id);
+      setCreatingNew(false);
+      setInitialMessage("");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to open support ticket. Please verify your details."
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeTicket || !replyText.trim()) return;
-    await sendChatMessage(
-      activeTicket.id,
-      replyText,
-      "customer",
-      activeTicket.customerName
-    );
+    if (!activeTicket || !replyText.trim() || submitting) return;
+    setError(null);
+    const messageToSend = replyText;
     setReplyText("");
+    try {
+      await sendChatMessage(
+        activeTicket.id,
+        messageToSend,
+        "customer",
+        activeTicket.customerName
+      );
+    } catch (err) {
+      setReplyText(messageToSend);
+      setError(
+        err instanceof Error ? err.message : "Unable to send message."
+      );
+    }
   };
 
+  const activeQueuePos = activeTicket
+    ? activeTicket.queuePosition ?? (getQueuePosition(activeTicket.id) || 1)
+    : 1;
+
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 space-y-6">
+    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4 border-b border-separator pb-5">
         <div>
-          <Chip size="sm" color="accent" variant="soft">
-            Queued Support & Pre-Press Ticketing
-          </Chip>
-          <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-foreground">
-            Customer Live Chat & Support Queue
+          <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted">
+            Client Support & Pre-Press
+          </p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+            Support Ticket Queue
           </h1>
           <p className="mt-1 text-sm text-muted">
-            Open a support ticket to enter the live print specialist queue. Your
-            queue position updates automatically as staff claim tickets.
+            Open a ticket to consult with an estimator or pre-press specialist.
+            Queue positions update automatically as staff claim tickets.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 rounded-xl border border-separator bg-surface px-3.5 py-2 text-xs">
-            <Users className="h-4 w-4 text-emerald-500" />
-            <span>
-              <strong>{onlineSpecialists.length}</strong> Specialists Online •{" "}
-              <strong>{totalQueued}</strong> in Queue
-            </span>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="rounded-lg border border-separator bg-surface px-3.5 py-2 text-xs text-muted tabular-nums">
+            <span className="font-medium text-foreground">{onlineCount}</span>{" "}
+            on duty ·{" "}
+            <span className="font-medium text-foreground">{totalQueued}</span>{" "}
+            waiting
           </div>
           <Button
             variant="primary"
             size="sm"
-            onPress={() => setCreatingNew(true)}
+            onPress={() => {
+              setError(null);
+              setCreatingNew(true);
+            }}
           >
             <Plus className="h-4 w-4" />
-            New Chat Ticket
+            New Ticket
           </Button>
         </div>
       </div>
 
+      {error && (
+        <div className="flex items-center gap-2 rounded-lg border border-danger/30 bg-danger/10 px-4 py-2.5 text-xs text-danger">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-12">
-        {/* Left Sidebar: My Tickets & Queue Info */}
+        {/* Left Sidebar */}
         <div className="space-y-4 lg:col-span-4">
           <Card className="border border-separator bg-surface p-4 space-y-3">
             <div className="text-xs font-semibold uppercase tracking-wider text-muted">
-              Your Support Tickets
+              Active Session Tickets
             </div>
             {customerTickets.length === 0 ? (
-              <p className="text-xs text-muted py-4 text-center">
-                No active tickets in this session yet. Start a ticket on the
-                right to join the queue!
+              <p className="py-4 text-xs text-muted">
+                No tickets opened in this session. Submit the form on the right
+                to enter the support queue.
               </p>
             ) : (
               <div className="space-y-2">
                 {customerTickets.map((t) => {
-                  const pos = getQueuePosition(t.id);
+                  const pos =
+                    t.queuePosition ?? (getQueuePosition(t.id) || 1);
                   const isSelected =
                     !creatingNew && activeTicket?.id === t.id;
                   return (
@@ -182,16 +235,17 @@ function ChatPageContent() {
                       type="button"
                       onClick={() => {
                         setSelectedTicketId(t.id);
+                        setActiveStoredTicketId(t.id);
                         setCreatingNew(false);
                       }}
-                      className={`w-full rounded-xl border p-3 text-left transition ${
+                      className={`w-full rounded-lg border p-3 text-left transition-colors ${
                         isSelected
-                          ? "border-accent bg-accent/10"
-                          : "border-separator bg-surface-secondary/40 hover:border-accent/40"
+                          ? "border-foreground/40 bg-surface-secondary"
+                          : "border-separator bg-background hover:bg-surface-secondary/50"
                       }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono text-xs font-bold text-accent">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-xs font-semibold text-foreground">
                           {t.ticketNumber}
                         </span>
                         <Chip
@@ -200,21 +254,21 @@ function ChatPageContent() {
                             t.status === "active"
                               ? "success"
                               : t.status === "queued"
-                              ? "warning"
-                              : "default"
+                                ? "warning"
+                                : "default"
                           }
                           variant="soft"
                         >
                           {t.status === "queued"
-                            ? `#${pos || 1} in Queue`
+                            ? `Queue #${pos}`
                             : t.status}
                         </Chip>
                       </div>
-                      <div className="mt-1 text-xs font-semibold text-foreground">
+                      <div className="mt-1 text-xs font-medium text-foreground">
                         {t.topic}
                       </div>
                       {t.linkedReference && (
-                        <div className="text-[11px] font-mono text-muted">
+                        <div className="mt-0.5 font-mono text-[11px] text-muted">
                           Ref: {t.linkedReference}
                         </div>
                       )}
@@ -225,53 +279,54 @@ function ChatPageContent() {
             )}
           </Card>
 
-          <Card className="border border-separator bg-surface p-4 space-y-2.5 text-xs">
-            <div className="flex items-center gap-2 font-semibold text-foreground">
-              <Clock className="h-4 w-4 text-accent" />
-              How Our Chat Queue Works
+          <Card className="border border-separator bg-surface p-4 space-y-2 text-xs">
+            <div className="font-semibold text-foreground">
+              Queue Routing Protocol
             </div>
-            <p className="text-muted leading-relaxed">
-              1. Submit your topic & optional Quotation/Order Reference Number.
+            <p className="leading-relaxed text-muted">
+              1. Provide your inquiry topic and optional Order or Quotation
+              reference code.
             </p>
-            <p className="text-muted leading-relaxed">
-              2. Receive a <code className="font-mono">TKT-XXXX</code> number and
-              live queue position.
+            <p className="leading-relaxed text-muted">
+              2. Receive a unique{" "}
+              <code className="font-mono text-foreground">TKT-XXXXXXXX</code>{" "}
+              identifier and live queue position.
             </p>
-            <p className="text-muted leading-relaxed">
-              3. A Front Desk or Pre-Press employee claims your ticket from the
-              Employee Console and responds in real time.
+            <p className="leading-relaxed text-muted">
+              3. An estimator or front-desk coordinator claims your ticket and
+              replies directly in this thread.
             </p>
           </Card>
         </div>
 
-        {/* Right Main Panel: New Ticket Form OR Live Chat Room */}
+        {/* Right Main Panel */}
         <div className="lg:col-span-8">
           {creatingNew || !activeTicket ? (
             <Card className="border border-separator bg-surface p-6">
-              <h2 className="text-lg font-bold text-foreground">
-                Open a Queued Support Ticket
+              <h2 className="text-base font-semibold text-foreground">
+                Open Support Ticket
               </h2>
               <p className="mt-1 text-xs text-muted">
-                Provide your inquiry details below so the right print specialist
-                can claim your chat.
+                Provide your contact and project context so the appropriate
+                specialist can assist you.
               </p>
 
               <form onSubmit={handleOpenTicket} className="mt-5 space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-foreground">
-                      Your Name *
+                    <label className="mb-1 block text-xs font-medium text-foreground">
+                      Contact Name *
                     </label>
                     <input
                       required
                       value={customerName}
                       onChange={(e) => setCustomerName(e.target.value)}
-                      placeholder="Camille Soriano"
-                      className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3.5 py-2.5 text-sm text-foreground outline-none focus:border-accent"
+                      placeholder="Full name"
+                      className="h-10 w-full rounded-lg border border-separator bg-background px-3.5 text-sm text-foreground outline-none focus:border-accent"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-foreground">
+                    <label className="mb-1 block text-xs font-medium text-foreground">
                       Email Address *
                     </label>
                     <input
@@ -279,28 +334,28 @@ function ChatPageContent() {
                       type="email"
                       value={customerEmail}
                       onChange={(e) => setCustomerEmail(e.target.value)}
-                      placeholder="camille@company.com"
-                      className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3.5 py-2.5 text-sm text-foreground outline-none focus:border-accent"
+                      placeholder="name@company.com"
+                      className="h-10 w-full rounded-lg border border-separator bg-background px-3.5 text-sm text-foreground outline-none focus:border-accent"
                     />
                   </div>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-3">
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-foreground">
-                      Support Topic
+                    <label className="mb-1 block text-xs font-medium text-foreground">
+                      Department / Topic
                     </label>
                     <select
                       value={topic}
                       onChange={(e) => setTopic(e.target.value)}
-                      className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2.5 text-sm text-foreground"
+                      className="h-10 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
                     >
                       <option value="Quotation Help">Quotation Help</option>
                       <option value="Pricing Inquiry">
-                        Price Per Size Question
+                        Per-Size Pricing Inquiry
                       </option>
                       <option value="Artwork / File Check">
-                        Artwork / Bleed Check
+                        Pre-Press / File Check
                       </option>
                       <option value="Order Follow-up">Order Follow-up</option>
                       <option value="General Support">General Support</option>
@@ -308,46 +363,46 @@ function ChatPageContent() {
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-foreground">
-                      Linked Reference # (Optional)
+                    <label className="mb-1 block text-xs font-medium text-foreground">
+                      Linked Reference (Optional)
                     </label>
                     <input
                       value={linkedRef}
                       onChange={(e) => setLinkedRef(e.target.value)}
                       placeholder="QT-2026-... or ORD-2026-..."
-                      className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2.5 font-mono text-sm text-foreground outline-none focus:border-accent"
+                      className="h-10 w-full rounded-lg border border-separator bg-background px-3 font-mono text-xs text-foreground outline-none placeholder:font-sans focus:border-accent"
                     />
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-foreground">
-                      Job Urgency
+                    <label className="mb-1 block text-xs font-medium text-foreground">
+                      Priority
                     </label>
                     <select
                       value={priority}
                       onChange={(e) =>
                         setPriority(e.target.value as TicketPriority)
                       }
-                      className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3 py-2.5 text-sm text-foreground"
+                      className="h-10 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
                     >
-                      <option value="normal">Normal</option>
-                      <option value="high">High (Deadline Soon)</option>
-                      <option value="urgent">Urgent (Same-Day Rush)</option>
+                      <option value="normal">Standard</option>
+                      <option value="high">Time-Sensitive</option>
+                      <option value="urgent">Same-Day Rush</option>
                     </select>
                   </div>
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-foreground">
-                    Initial Message *
+                  <label className="mb-1 block text-xs font-medium text-foreground">
+                    Message *
                   </label>
                   <textarea
                     required
                     rows={4}
                     value={initialMessage}
                     onChange={(e) => setInitialMessage(e.target.value)}
-                    placeholder="Describe your size, quantity, artwork setup question, or order update request..."
-                    className="w-full rounded-xl border border-separator bg-surface-secondary/50 px-3.5 py-2.5 text-sm text-foreground outline-none focus:border-accent"
+                    placeholder="State your target dimensions, quantity, artwork bleed question, or order inquiry..."
+                    className="w-full rounded-lg border border-separator bg-background px-3.5 py-2.5 text-sm text-foreground outline-none focus:border-accent"
                   />
                 </div>
 
@@ -360,89 +415,85 @@ function ChatPageContent() {
                       Cancel
                     </Button>
                   )}
-                  <Button type="submit" variant="primary">
-                    <MessageSquare className="h-4 w-4" />
-                    Enter Support Queue
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    isDisabled={submitting}
+                  >
+                    {submitting ? "Opening Ticket..." : "Enter Support Queue"}
                   </Button>
                 </div>
               </form>
             </Card>
           ) : (
             <Card className="flex h-[580px] flex-col overflow-hidden border border-separator bg-surface p-0">
-              {/* Active Ticket Top Bar */}
+              {/* Active Ticket Header */}
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-separator bg-surface-secondary/60 px-5 py-3.5">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/15 text-accent">
-                    <Ticket className="h-5 w-5" />
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-sm font-semibold text-foreground">
+                      {activeTicket.ticketNumber}
+                    </span>
+                    <span className="text-xs text-muted">
+                      · {activeTicket.topic}
+                    </span>
+                    {activeTicket.linkedReference && (
+                      <span className="rounded bg-surface px-2 py-0.5 font-mono text-[11px] text-foreground border border-separator">
+                        {activeTicket.linkedReference}
+                      </span>
+                    )}
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-sm font-bold text-foreground">
-                        {activeTicket.ticketNumber}
-                      </span>
-                      <span className="text-xs text-muted">
-                        • {activeTicket.topic}
-                      </span>
-                      {activeTicket.linkedReference && (
-                        <Chip size="sm" color="accent" variant="soft">
-                          Ref: {activeTicket.linkedReference}
-                        </Chip>
-                      )}
-                    </div>
-                    <div className="text-xs text-muted">
-                      {activeTicket.status === "queued"
-                        ? `Waiting in Queue — Position #${
-                            getQueuePosition(activeTicket.id) || 1
+                  <div className="mt-0.5 text-xs text-muted tabular-nums">
+                    {activeTicket.status === "queued"
+                      ? `Waiting for specialist — Queue #${activeQueuePos}`
+                      : activeTicket.status === "active"
+                        ? `Assigned to ${
+                            activeTicket.assignedEmployeeName ||
+                            "Print Specialist"
                           }`
-                        : activeTicket.status === "active"
-                        ? `Connected with ${
-                            activeTicket.assignedEmployeeName || "Print Staff"
-                          }`
-                        : "Ticket Resolved"}
-                    </div>
+                        : "Ticket Closed"}
                   </div>
                 </div>
 
                 <Chip
+                  size="sm"
                   color={
                     activeTicket.status === "active"
                       ? "success"
                       : activeTicket.status === "queued"
-                      ? "warning"
-                      : "default"
+                        ? "warning"
+                        : "default"
                   }
                   variant="soft"
                 >
                   {activeTicket.status === "queued"
-                    ? `Queue #${getQueuePosition(activeTicket.id) || 1}`
-                    : activeTicket.status.toUpperCase()}
+                    ? `Queue #${activeQueuePos}`
+                    : activeTicket.status}
                 </Chip>
               </div>
 
-              {/* Queue Banner when waiting */}
+              {/* Queue Status Banner */}
               {activeTicket.status === "queued" && (
-                <div className="flex items-center justify-between bg-amber-500/10 px-5 py-2.5 text-xs text-amber-600 dark:text-amber-400 border-b border-amber-500/20">
-                  <span className="flex items-center gap-2">
-                    <Headset className="h-4 w-4" />
-                    You are currently{" "}
-                    <strong>
-                      #{getQueuePosition(activeTicket.id) || 1} in the support
-                      queue
+                <div className="flex items-center justify-between border-b border-separator bg-surface-secondary/30 px-5 py-2 text-xs text-muted tabular-nums">
+                  <span>
+                    Current queue position:{" "}
+                    <strong className="text-foreground">
+                      #{activeQueuePos}
                     </strong>
-                    . You can keep adding details below while waiting!
+                    . You may append specifications or links below while
+                    waiting.
                   </span>
-                  <span>Est. wait: ~2–5 mins</span>
                 </div>
               )}
 
-              {/* Messages Thread */}
+              {/* Message Thread */}
               <div className="flex-1 space-y-3 overflow-y-auto p-5">
                 {activeTicket.messages.map((msg) => {
                   if (msg.senderRole === "system") {
                     return (
                       <div
                         key={msg.id}
-                        className="mx-auto max-w-md rounded-full bg-surface-secondary px-4 py-1 text-center text-[11px] text-muted"
+                        className="mx-auto max-w-md rounded-md border border-separator bg-surface-secondary/50 px-3 py-1.5 text-center text-[11px] text-muted"
                       >
                         {msg.message}
                       </div>
@@ -456,18 +507,18 @@ function ChatPageContent() {
                         isCustomer ? "items-end" : "items-start"
                       }`}
                     >
-                      <span className="mb-1 text-[11px] text-muted">
-                        {msg.senderName} •{" "}
+                      <span className="mb-1 text-[11px] text-muted tabular-nums">
+                        {msg.senderName} ·{" "}
                         {new Date(msg.createdAt).toLocaleTimeString([], {
                           hour: "2-digit",
                           minute: "2-digit",
                         })}
                       </span>
                       <div
-                        className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                        className={`max-w-[75%] rounded-xl px-3.5 py-2.5 text-sm leading-relaxed ${
                           isCustomer
-                            ? "bg-accent text-accent-foreground rounded-br-xs"
-                            : "border border-separator bg-surface-secondary text-foreground rounded-bl-xs"
+                            ? "bg-foreground text-background"
+                            : "border border-separator bg-surface-secondary text-foreground"
                         }`}
                       >
                         {msg.message}
@@ -487,19 +538,19 @@ function ChatPageContent() {
                   <input
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
-                    placeholder="Write a message to our print desk..."
-                    className="flex-1 rounded-xl border border-separator bg-surface-secondary/50 px-4 py-2.5 text-sm text-foreground outline-none focus:border-accent"
+                    placeholder="Write a message..."
+                    className="h-10 flex-1 rounded-lg border border-separator bg-background px-3.5 text-sm text-foreground outline-none focus:border-accent"
                   />
-                  <Button type="submit" variant="primary">
+                  <Button type="submit" variant="primary" className="h-10">
                     <Send className="h-4 w-4" />
                     Send
                   </Button>
                 </form>
               ) : (
                 <div className="border-t border-separator bg-surface-secondary/40 p-4 text-center text-xs text-muted">
-                  This ticket has been marked as resolved. Click{" "}
-                  <strong>New Chat Ticket</strong> above if you need further
-                  help.
+                  This support ticket is resolved. Select{" "}
+                  <strong className="text-foreground">New Ticket</strong> above
+                  to open a new inquiry.
                 </div>
               )}
             </Card>
@@ -515,7 +566,7 @@ export default function ChatPage() {
     <Suspense
       fallback={
         <div className="mx-auto max-w-7xl px-4 py-16 text-center text-sm text-muted">
-          Loading Live Support Queue...
+          Loading Support Queue...
         </div>
       }
     >
@@ -523,4 +574,3 @@ export default function ChatPage() {
     </Suspense>
   );
 }
-

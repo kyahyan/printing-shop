@@ -44,12 +44,12 @@ export interface ProductSizeTier {
 
 export interface MaterialOption {
   name: string;
-  priceMultiplier: number; // e.g., 1.0 = standard, 1.25 = +25%
+  priceMultiplier: number;
 }
 
 export interface FinishOption {
   name: string;
-  addPerUnit: number; // flat surcharge per piece/unit
+  addPerUnit: number;
 }
 
 export interface Product {
@@ -126,6 +126,7 @@ export type ProductionStatus =
 export interface OrderItem {
   id: string;
   productId?: string;
+  sizeId?: string;
   productName: string;
   sizeLabel: string;
   material: string;
@@ -189,9 +190,9 @@ export interface ChatTicket {
   assignedEmployeeId?: string;
   assignedEmployeeName?: string;
   internalNotes?: string;
+  queuePosition?: number;
   queuedAt: string;
   claimedAt?: string;
   resolvedAt?: string;
   messages: ChatMessage[];
 }
-
