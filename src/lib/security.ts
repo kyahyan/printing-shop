@@ -92,3 +92,4 @@ export function setActiveStoredTicketId(ticketId: string | null): void {
     // Ignore storage errors
   }
 }
+

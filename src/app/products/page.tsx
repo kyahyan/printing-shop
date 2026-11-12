@@ -1,9 +1,26 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import Link from "next/link";
-import { Button, Card } from "@heroui/react";
-import { Search } from "lucide-react";
+import NextLink from "next/link";
+import {
+  ArrowsRotateLeft,
+  FileText,
+  Sliders,
+  Tray,
+} from "@gravity-ui/icons";
+import {
+  Breadcrumbs,
+  Button,
+  Card,
+  Chip,
+  EmptyState,
+  Label,
+  SearchField,
+  Table,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
+} from "@heroui/react";
 import { usePrintShop } from "@/context/PrintShopContext";
 import type { Product } from "@/types/printshop";
 import { ProductPriceModal } from "@/components/ProductPriceModal";
@@ -45,98 +62,122 @@ export default function ProductsPage() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 space-y-8">
+      <Breadcrumbs>
+        <Breadcrumbs.Item href="/">Home</Breadcrumbs.Item>
+        <Breadcrumbs.Item>Catalog & Pricing</Breadcrumbs.Item>
+      </Breadcrumbs>
+
       {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-separator pb-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted">
-            Standard Specifications
-          </p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+          <Typography.Heading
+            level={1}
+            className="text-2xl font-bold tracking-tight sm:text-3xl"
+          >
             Catalog & Per-Size Rate Schedules
-          </h1>
-          <p className="mt-1.5 max-w-2xl text-sm text-muted">
+          </Typography.Heading>
+          <Typography.Paragraph color="muted" size="sm" className="mt-1.5 max-w-2xl">
             Select any print line to calculate volume pricing across dimensions,
             paper substrates, and finishing options, or request a bespoke
             quotation.
-          </p>
+          </Typography.Paragraph>
         </div>
-        <Link href="/quotations">
-          <Button variant="primary">Request Custom Specification Quote</Button>
-        </Link>
+        <NextLink href="/quotations">
+          <Button variant="primary">
+            <FileText className="size-4" />
+            Request Custom Specification Quote
+          </Button>
+        </NextLink>
       </div>
 
-      {/* Filters & Search */}
+      {/* HeroUI Filters & Search */}
       {activeProducts.length > 0 && (
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setSelectedCategory(cat)}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                  selectedCategory === cat
-                    ? "bg-foreground text-background"
-                    : "border border-separator bg-surface text-muted hover:text-foreground"
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
+          <div className="overflow-x-auto">
+            <ToggleButtonGroup
+              aria-label="Filter by product category"
+              selectionMode="single"
+              selectedKeys={new Set([selectedCategory])}
+              onSelectionChange={(keys) => {
+                const first = [...keys][0];
+                if (first) setSelectedCategory(String(first));
+              }}
+            >
+              {categories.map((cat, idx) => (
+                <ToggleButton key={cat} id={cat}>
+                  {idx > 0 && <ToggleButtonGroup.Separator />}
+                  {cat}
+                </ToggleButton>
+              ))}
+            </ToggleButtonGroup>
           </div>
 
-          <div className="relative w-full md:w-80">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Filter by product, size, or dimension..."
-              className="h-9 w-full rounded-lg border border-separator bg-surface pl-9 pr-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted focus:border-accent"
-            />
-          </div>
+          <SearchField
+            className="w-full md:w-80"
+            value={search}
+            onChange={setSearch}
+          >
+            <Label className="sr-only">Filter catalog</Label>
+            <SearchField.Group>
+              <SearchField.SearchIcon />
+              <SearchField.Input placeholder="Filter by product, size, or dimension..." />
+              <SearchField.ClearButton />
+            </SearchField.Group>
+          </SearchField>
         </div>
       )}
 
       {/* Product Directory */}
       {activeProducts.length === 0 ? (
-        <Card className="border border-separator bg-surface p-10">
-          <div className="flex flex-col items-start justify-between gap-6 md:flex-row md:items-center">
-            <div className="space-y-1.5">
+        <Card className="p-10">
+          <EmptyState className="flex flex-col items-center justify-center gap-4 text-center">
+            <div className="flex size-12 items-center justify-center rounded-2xl bg-default text-muted">
+              <Tray className="size-6" />
+            </div>
+            <div className="space-y-1">
               <h3 className="text-base font-semibold text-foreground">
                 No catalog products published yet
               </h3>
-              <p className="max-w-xl text-sm text-muted">
+              <p className="max-w-lg text-sm text-muted">
                 Publish your print products and per-size pricing matrices from
                 the Administration workspace, or submit a custom project
                 quotation directly.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2.5">
-              <Link href="/quotations">
-                <Button variant="primary">Request Custom Quotation</Button>
-              </Link>
+            <div className="flex flex-wrap justify-center gap-2.5 pt-1">
+              <NextLink href="/quotations">
+                <Button variant="primary">
+                  <FileText className="size-4" />
+                  Request Custom Quotation
+                </Button>
+              </NextLink>
               {currentUser?.role === "super_admin" ? (
-                <Link href="/admin">
+                <NextLink href="/admin">
                   <Button variant="secondary">Open Administration</Button>
-                </Link>
+                </NextLink>
               ) : (
-                <Link href="/staff/login">
+                <NextLink href="/staff/login">
                   <Button variant="secondary">Staff Portal</Button>
-                </Link>
+                </NextLink>
               )}
             </div>
-          </div>
+          </EmptyState>
         </Card>
       ) : filtered.length === 0 ? (
-        <Card className="border border-separator bg-surface p-10 text-center space-y-3">
-          <h3 className="text-base font-semibold text-foreground">
-            No matching specifications found
-          </h3>
-          <p className="text-sm text-muted">
-            Clear your current filters or request a quotation for non-standard
-            dimensions.
-          </p>
-          <div>
+        <Card className="p-10">
+          <EmptyState className="flex flex-col items-center justify-center gap-4 text-center">
+            <div className="flex size-12 items-center justify-center rounded-2xl bg-default text-muted">
+              <Tray className="size-6" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-base font-semibold text-foreground">
+                No matching specifications found
+              </h3>
+              <p className="text-sm text-muted">
+                Clear your current filters or request a quotation for
+                non-standard dimensions.
+              </p>
+            </div>
             <Button
               variant="secondary"
               size="sm"
@@ -145,77 +186,81 @@ export default function ProductsPage() {
                 setSelectedCategory("All");
               }}
             >
+              <ArrowsRotateLeft className="size-3.5" />
               Reset Filters
             </Button>
-          </div>
+          </EmptyState>
         </Card>
       ) : (
         <div className="grid gap-6 md:grid-cols-2">
           {filtered.map((product) => (
-            <Card
-              key={product.id}
-              onClick={() => setSelectedProduct(product)}
-              className="cursor-pointer border border-separator bg-surface p-6 transition-colors hover:border-foreground/30 flex flex-col justify-between gap-5"
-            >
-              <div className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-foreground">
-                      {product.category}
+            <Card key={product.id} className="flex flex-col justify-between">
+              <div>
+                <Card.Header className="gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Chip size="sm" variant="soft" color="accent">
+                        <Chip.Label>{product.category}</Chip.Label>
+                      </Chip>
+                      {product.badge && (
+                        <Chip size="sm" variant="soft" color="warning">
+                          <Chip.Label>{product.badge}</Chip.Label>
+                        </Chip>
+                      )}
+                    </div>
+                    <span className="text-xs text-muted">
+                      Lead time: {product.leadTimeDays}
                     </span>
-                    {product.badge && (
-                      <span className="rounded bg-surface-secondary px-2 py-0.5 text-[11px] font-medium text-muted">
-                        {product.badge}
-                      </span>
-                    )}
                   </div>
-                  <span>Lead time: {product.leadTimeDays}</span>
-                </div>
-
-                <div>
-                  <h2 className="text-lg font-semibold text-foreground">
+                  <Card.Title className="pt-1 text-lg">
                     {product.name}
-                  </h2>
-                  <p className="mt-1 text-sm leading-relaxed text-muted">
-                    {product.shortDescription}
-                  </p>
-                </div>
+                  </Card.Title>
+                  <Card.Description>{product.shortDescription}</Card.Description>
+                </Card.Header>
 
-                {/* Per-Size Rate Schedule */}
-                <div className="overflow-hidden rounded-lg border border-separator">
-                  <div className="grid grid-cols-12 bg-surface-secondary px-3 py-2 text-[11px] font-medium text-muted">
-                    <div className="col-span-5">Size Option</div>
-                    <div className="col-span-3">Dimensions</div>
-                    <div className="col-span-2 text-right">1+ Rate</div>
-                    <div className="col-span-2 text-right">500+ Rate</div>
-                  </div>
-                  <div className="divide-y divide-separator text-xs tabular-nums">
-                    {product.sizes.map((sz) => (
-                      <div
-                        key={sz.id}
-                        className="grid grid-cols-12 items-center px-3 py-2"
+                <Card.Content className="pt-2">
+                  <Table variant="secondary">
+                    <Table.ScrollContainer>
+                      <Table.Content
+                        aria-label={`${product.name} size schedule`}
                       >
-                        <div className="col-span-5 truncate pr-2 font-medium text-foreground">
-                          {sz.sizeLabel}
-                        </div>
-                        <div className="col-span-3 truncate pr-1 font-mono text-[11px] text-muted">
-                          {sz.dimensions}
-                        </div>
-                        <div className="col-span-2 text-right font-mono font-medium text-foreground">
-                          {formatCurrency(sz.unitPrice)}
-                        </div>
-                        <div className="col-span-2 text-right font-mono font-medium text-accent">
-                          {sz.bulk500Price != null
-                            ? formatCurrency(sz.bulk500Price)
-                            : "—"}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                        <Table.Header>
+                          <Table.Column isRowHeader>Size Option</Table.Column>
+                          <Table.Column>Dimensions</Table.Column>
+                          <Table.Column>1+ Rate</Table.Column>
+                          <Table.Column>500+ Rate</Table.Column>
+                        </Table.Header>
+                        <Table.Body>
+                          {product.sizes.map((sz) => (
+                            <Table.Row
+                              key={sz.id}
+                              id={sz.id}
+                              className="tabular-nums"
+                            >
+                              <Table.Cell className="font-medium text-foreground">
+                                {sz.sizeLabel}
+                              </Table.Cell>
+                              <Table.Cell className="font-mono text-xs text-muted">
+                                {sz.dimensions}
+                              </Table.Cell>
+                              <Table.Cell className="font-mono font-medium text-foreground">
+                                {formatCurrency(sz.unitPrice)}
+                              </Table.Cell>
+                              <Table.Cell className="font-mono font-semibold text-accent">
+                                {sz.bulk500Price != null
+                                  ? formatCurrency(sz.bulk500Price)
+                                  : "—"}
+                              </Table.Cell>
+                            </Table.Row>
+                          ))}
+                        </Table.Body>
+                      </Table.Content>
+                    </Table.ScrollContainer>
+                  </Table>
+                </Card.Content>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-separator pt-4">
+              <Card.Footer className="flex-wrap items-center justify-between gap-3 border-t border-separator pt-4">
                 <div className="text-xs text-muted tabular-nums">
                   Minimum run:{" "}
                   <span className="font-medium text-foreground">
@@ -228,9 +273,10 @@ export default function ProductsPage() {
                   variant="primary"
                   onPress={() => setSelectedProduct(product)}
                 >
+                  <Sliders className="size-3.5" />
                   Configure & Calculate
                 </Button>
-              </div>
+              </Card.Footer>
             </Card>
           ))}
         </div>

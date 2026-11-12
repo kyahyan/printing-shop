@@ -1,44 +1,55 @@
 "use client";
 
-import Link from "next/link";
+import {
+  Clock,
+  Envelope,
+  Handset,
+  MapPin,
+  Printer,
+} from "@gravity-ui/icons";
+import { Chip, Link, Separator, Surface, Typography } from "@heroui/react";
 import { usePrintShop } from "@/context/PrintShopContext";
 
 export function Footer() {
   const { settings } = usePrintShop();
 
   return (
-    <footer className="mt-24 border-t border-separator bg-surface">
+    <footer className="mt-20 border-t border-separator bg-surface">
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6">
         <div className="grid gap-10 md:grid-cols-12">
           <div className="space-y-4 md:col-span-5">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-foreground text-background font-mono text-xs font-semibold">
-                CJ
+              <div className="flex size-8 items-center justify-center rounded-xl bg-accent text-accent-foreground">
+                <Printer className="size-4" />
               </div>
-              <span className="text-sm font-semibold tracking-tight text-foreground">
+              <span className="text-base font-semibold tracking-tight text-foreground">
                 {settings.shopName}
               </span>
             </div>
-            <p className="max-w-md text-sm leading-relaxed text-muted">
+
+            <Typography.Paragraph color="muted" size="sm" className="max-w-md">
               {settings.tagline}
-            </p>
-            <div className="rounded-lg border border-separator bg-surface-secondary/60 px-3.5 py-3 text-xs leading-relaxed text-muted">
-              <span className="font-medium text-foreground">
-                Terms & Production Policy:{" "}
-              </span>
-              {settings.paymentInstructions}
-            </div>
+            </Typography.Paragraph>
+
+            <Surface variant="secondary" className="rounded-2xl p-4">
+              <div className="mb-1 text-xs font-semibold text-foreground">
+                Terms & Production Policy
+              </div>
+              <p className="text-xs leading-relaxed text-muted">
+                {settings.paymentInstructions}
+              </p>
+            </Surface>
           </div>
 
-          <div className="space-y-3 text-sm md:col-span-3">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted">
+          <div className="space-y-3 md:col-span-3">
+            <div className="text-xs font-semibold uppercase tracking-wider text-muted">
               Services & Desk
-            </h4>
-            <ul className="space-y-2 text-muted">
+            </div>
+            <ul className="flex flex-col gap-2 text-sm">
               <li>
                 <Link
                   href="/products"
-                  className="transition-colors hover:text-foreground"
+                  className="text-sm text-muted no-underline hover:text-foreground"
                 >
                   Catalog & Pricing Schedules
                 </Link>
@@ -46,7 +57,7 @@ export function Footer() {
               <li>
                 <Link
                   href="/quotations"
-                  className="transition-colors hover:text-foreground"
+                  className="text-sm text-muted no-underline hover:text-foreground"
                 >
                   Formal Quotation Request
                 </Link>
@@ -54,15 +65,15 @@ export function Footer() {
               <li>
                 <Link
                   href="/track"
-                  className="transition-colors hover:text-foreground"
+                  className="text-sm text-muted no-underline hover:text-foreground"
                 >
-                  Reference Lookup
+                  Order & Quote Tracking
                 </Link>
               </li>
               <li>
                 <Link
                   href="/chat"
-                  className="transition-colors hover:text-foreground"
+                  className="text-sm text-muted no-underline hover:text-foreground"
                 >
                   Client Support Queue
                 </Link>
@@ -70,7 +81,7 @@ export function Footer() {
               <li>
                 <Link
                   href="/staff/login"
-                  className="transition-colors hover:text-foreground"
+                  className="text-sm text-muted no-underline hover:text-foreground"
                 >
                   Staff & Administration
                 </Link>
@@ -78,46 +89,55 @@ export function Footer() {
             </ul>
           </div>
 
-          <div className="space-y-3 text-sm md:col-span-4">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted">
+          <div className="space-y-3 md:col-span-4">
+            <div className="text-xs font-semibold uppercase tracking-wider text-muted">
               Studio Information
-            </h4>
-            <dl className="space-y-2 text-sm">
-              <div className="flex justify-between gap-4 border-b border-separator/70 pb-1.5">
-                <dt className="text-muted">Location</dt>
-                <dd className="text-right text-foreground">
-                  {settings.shopAddress}
-                </dd>
+            </div>
+            <Surface variant="secondary" className="rounded-2xl p-4 space-y-3">
+              <div className="flex items-start gap-2.5 text-xs">
+                <MapPin className="mt-0.5 size-3.5 shrink-0 text-muted" />
+                <span className="text-foreground">{settings.shopAddress}</span>
               </div>
-              <div className="flex justify-between gap-4 border-b border-separator/70 pb-1.5">
-                <dt className="text-muted">Telephone</dt>
-                <dd className="text-right font-mono text-xs text-foreground tabular-nums">
+              <Separator />
+              <div className="flex items-center gap-2.5 text-xs">
+                <Handset className="size-3.5 shrink-0 text-muted" />
+                <span className="font-mono text-foreground tabular-nums">
                   {settings.contactPhone}
-                </dd>
+                </span>
               </div>
-              <div className="flex justify-between gap-4 border-b border-separator/70 pb-1.5">
-                <dt className="text-muted">Email</dt>
-                <dd className="text-right text-foreground">
-                  {settings.contactEmail}
-                </dd>
+              <Separator />
+              <div className="flex items-center gap-2.5 text-xs">
+                <Envelope className="size-3.5 shrink-0 text-muted" />
+                <span className="text-foreground">{settings.contactEmail}</span>
               </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-muted">Hours</dt>
-                <dd className="text-right text-foreground">
-                  {settings.businessHours}
-                </dd>
+              <Separator />
+              <div className="flex items-center gap-2.5 text-xs">
+                <Clock className="size-3.5 shrink-0 text-muted" />
+                <span className="text-foreground">{settings.businessHours}</span>
               </div>
-            </dl>
+            </Surface>
           </div>
         </div>
 
-        <div className="mt-10 flex flex-wrap items-center justify-between gap-3 border-t border-separator pt-6 text-xs text-muted tabular-nums">
+        <Separator className="my-8" />
+
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted tabular-nums">
           <span>© 2026 {settings.shopName}. All rights reserved.</span>
-          <span>
-            Settlement Currency: {settings.currencyCode} ({settings.currencySymbol}) ·
-            Applicable VAT: {settings.taxRate}% · Quote Validity:{" "}
-            {settings.quotationValidityDays} days
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <Chip size="sm" variant="soft" color="default">
+              <Chip.Label>
+                {settings.currencyCode} ({settings.currencySymbol})
+              </Chip.Label>
+            </Chip>
+            <Chip size="sm" variant="soft" color="default">
+              <Chip.Label>VAT {settings.taxRate}%</Chip.Label>
+            </Chip>
+            <Chip size="sm" variant="soft" color="default">
+              <Chip.Label>
+                Quote Validity: {settings.quotationValidityDays}d
+              </Chip.Label>
+            </Chip>
+          </div>
         </div>
       </div>
     </footer>

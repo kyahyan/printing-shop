@@ -1,9 +1,41 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { Button, Card, Chip, Modal, Table } from "@heroui/react";
-import { AlertCircle, CheckCircle2, Copy } from "lucide-react";
+import NextLink from "next/link";
+import {
+  Check,
+  CircleCheck,
+  Comments,
+  Copy,
+  FileText,
+  Magnifier,
+  Printer,
+  ShoppingBag,
+} from "@gravity-ui/icons";
+import {
+  Alert,
+  Button,
+  Card,
+  Chip,
+  Description,
+  FieldError,
+  Form,
+  Input,
+  Label,
+  ListBox,
+  Modal,
+  NumberField,
+  Select,
+  Separator,
+  Spinner,
+  Surface,
+  Table,
+  TextArea,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  toast,
+} from "@heroui/react";
 import type { Order, Product } from "@/types/printshop";
 import { usePrintShop } from "@/context/PrintShopContext";
 
@@ -112,7 +144,11 @@ export function ProductPriceModal({
     (breakdown.lineTotal + taxAmount).toFixed(2)
   );
 
-  const handlePlaceOrder = async (e: React.FormEvent) => {
+  const presetQuantities = [product.minOrderQty, 50, 100, 250, 500].filter(
+    (v, idx, arr) => v >= product.minOrderQty && arr.indexOf(v) === idx
+  );
+
+  const handlePlaceOrder = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!selectedSize || submitting) return;
     setSubmitError(null);
@@ -144,6 +180,7 @@ export function ProductPriceModal({
         notes: customNotes,
       });
       setCreatedOrder(order);
+      toast.success(`Order ${order.referenceNumber} registered`);
     } catch (err) {
       setSubmitError(
         err instanceof Error
@@ -155,7 +192,7 @@ export function ProductPriceModal({
     }
   };
 
-  const handleRequestQuote = async (e: React.FormEvent) => {
+  const handleRequestQuote = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!selectedSize || submitting) return;
     setSubmitError(null);
@@ -177,6 +214,7 @@ export function ProductPriceModal({
         notes: customNotes || undefined,
       });
       setCreatedQuoteRef(quote.referenceNumber);
+      toast.success(`Quotation ${quote.referenceNumber} logged`);
     } catch (err) {
       setSubmitError(
         err instanceof Error
@@ -191,6 +229,7 @@ export function ProductPriceModal({
   const copyReference = (ref: string) => {
     navigator.clipboard.writeText(ref);
     setCopied(true);
+    toast.success("Reference copied to clipboard");
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -205,18 +244,21 @@ export function ProductPriceModal({
       <Modal.Container size="lg" scroll="inside" placement="center">
         <Modal.Dialog className="max-w-4xl">
           <Modal.CloseTrigger />
-          <Modal.Header className="border-b border-separator pb-4">
-            <div className="mb-1.5 flex flex-wrap items-center gap-2 text-xs text-muted">
-              <span className="font-medium text-foreground">
-                {product.category}
-              </span>
-              <span>·</span>
-              <span>Lead time: {product.leadTimeDays}</span>
+          <Modal.Header>
+            <Modal.Icon className="bg-accent-soft text-accent-soft-foreground">
+              <Printer className="size-5" />
+            </Modal.Icon>
+            <div className="mb-1.5 flex flex-wrap items-center gap-2">
+              <Chip size="sm" variant="soft" color="accent">
+                <Chip.Label>{product.category}</Chip.Label>
+              </Chip>
+              <Chip size="sm" variant="soft" color="default">
+                <Chip.Label>Lead time: {product.leadTimeDays}</Chip.Label>
+              </Chip>
               {product.badge && (
-                <>
-                  <span>·</span>
-                  <span>{product.badge}</span>
-                </>
+                <Chip size="sm" variant="soft" color="warning">
+                  <Chip.Label>{product.badge}</Chip.Label>
+                </Chip>
               )}
             </div>
             <Modal.Heading className="text-xl font-semibold tracking-tight">
@@ -225,309 +267,350 @@ export function ProductPriceModal({
             <p className="mt-1 text-sm text-muted">{product.description}</p>
           </Modal.Header>
 
-          <Modal.Body className="space-y-6 py-5">
+          <Modal.Body className="space-y-6 py-4">
             {createdOrder ? (
-              <Card className="border border-separator bg-surface p-6 space-y-5">
-                <div className="flex items-start gap-3">
-                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                  <div>
-                    <h3 className="text-base font-semibold text-foreground">
-                      Production Order Registered
-                    </h3>
-                    <p className="mt-0.5 text-sm text-muted">
-                      Retain your reference number below to monitor production
-                      stages or coordinate with our pre-press desk.
-                    </p>
+              <Card variant="secondary">
+                <Card.Header>
+                  <div className="flex items-center gap-2.5">
+                    <CircleCheck className="size-5 text-success" />
+                    <Card.Title>Production Order Registered</Card.Title>
                   </div>
-                </div>
+                  <Card.Description>
+                    Retain your reference number below to monitor production
+                    stages or coordinate with our pre-press desk.
+                  </Card.Description>
+                </Card.Header>
+                <Card.Content className="space-y-4">
+                  <Surface className="flex items-center justify-between rounded-2xl p-4">
+                    <div>
+                      <div className="text-xs font-medium text-muted">
+                        Order Reference
+                      </div>
+                      <div className="mt-0.5 font-mono text-lg font-semibold text-foreground">
+                        {createdOrder.referenceNumber}
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onPress={() =>
+                        copyReference(createdOrder.referenceNumber)
+                      }
+                    >
+                      {copied ? (
+                        <Check className="size-3.5" />
+                      ) : (
+                        <Copy className="size-3.5" />
+                      )}
+                      {copied ? "Copied" : "Copy"}
+                    </Button>
+                  </Surface>
 
-                <div className="flex items-center justify-between rounded-lg border border-separator bg-surface-secondary px-4 py-3">
-                  <div>
-                    <div className="text-[11px] font-medium uppercase tracking-wider text-muted">
-                      Order Reference
-                    </div>
-                    <div className="mt-0.5 font-mono text-lg font-semibold text-foreground">
-                      {createdOrder.referenceNumber}
-                    </div>
+                  <div className="text-xs text-muted tabular-nums">
+                    Order Total:{" "}
+                    <strong className="font-mono text-foreground">
+                      {formatCurrency(createdOrder.totalAmount)}
+                    </strong>{" "}
+                    (inclusive of {settings.taxRate}% VAT)
                   </div>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onPress={() => copyReference(createdOrder.referenceNumber)}
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                    {copied ? "Copied" : "Copy"}
-                  </Button>
-                </div>
-
-                <div className="text-xs text-muted tabular-nums">
-                  Order Total:{" "}
-                  <strong className="font-mono text-foreground">
-                    {formatCurrency(createdOrder.totalAmount)}
-                  </strong>{" "}
-                  (inclusive of {settings.taxRate}% VAT)
-                </div>
-
-                <div className="flex flex-wrap gap-2.5 border-t border-separator pt-4">
-                  <Link
+                </Card.Content>
+                <Card.Footer className="flex flex-wrap gap-2">
+                  <NextLink
                     href={`/track?ref=${encodeURIComponent(createdOrder.referenceNumber)}`}
                     onClick={onClose}
                   >
                     <Button variant="primary" size="sm">
+                      <Magnifier className="size-3.5" />
                       View Order Status
                     </Button>
-                  </Link>
-                  <Link
+                  </NextLink>
+                  <NextLink
                     href={`/chat?ref=${encodeURIComponent(createdOrder.referenceNumber)}`}
                     onClick={onClose}
                   >
                     <Button variant="secondary" size="sm">
+                      <Comments className="size-3.5" />
                       Open Support Ticket
                     </Button>
-                  </Link>
-                </div>
+                  </NextLink>
+                </Card.Footer>
               </Card>
             ) : createdQuoteRef ? (
-              <Card className="border border-separator bg-surface p-6 space-y-5">
-                <div className="flex items-start gap-3">
-                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                  <div>
-                    <h3 className="text-base font-semibold text-foreground">
-                      Quotation Inquiry Logged
-                    </h3>
-                    <p className="mt-0.5 text-sm text-muted">
-                      Our estimating desk will review your specifications and
-                      publish a formal quotation under this reference.
-                    </p>
+              <Card variant="secondary">
+                <Card.Header>
+                  <div className="flex items-center gap-2.5">
+                    <CircleCheck className="size-5 text-success" />
+                    <Card.Title>Quotation Inquiry Logged</Card.Title>
                   </div>
-                </div>
-
-                <div className="flex items-center justify-between rounded-lg border border-separator bg-surface-secondary px-4 py-3">
-                  <div>
-                    <div className="text-[11px] font-medium uppercase tracking-wider text-muted">
-                      Quotation Reference
+                  <Card.Description>
+                    Our estimating desk will review your specifications and
+                    publish a formal quotation under this reference.
+                  </Card.Description>
+                </Card.Header>
+                <Card.Content>
+                  <Surface className="flex items-center justify-between rounded-2xl p-4">
+                    <div>
+                      <div className="text-xs font-medium text-muted">
+                        Quotation Reference
+                      </div>
+                      <div className="mt-0.5 font-mono text-lg font-semibold text-foreground">
+                        {createdQuoteRef}
+                      </div>
                     </div>
-                    <div className="mt-0.5 font-mono text-lg font-semibold text-foreground">
-                      {createdQuoteRef}
-                    </div>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onPress={() => copyReference(createdQuoteRef)}
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                    {copied ? "Copied" : "Copy"}
-                  </Button>
-                </div>
-
-                <div className="flex flex-wrap gap-2.5 border-t border-separator pt-4">
-                  <Link
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onPress={() => copyReference(createdQuoteRef)}
+                    >
+                      {copied ? (
+                        <Check className="size-3.5" />
+                      ) : (
+                        <Copy className="size-3.5" />
+                      )}
+                      {copied ? "Copied" : "Copy"}
+                    </Button>
+                  </Surface>
+                </Card.Content>
+                <Card.Footer className="flex flex-wrap gap-2">
+                  <NextLink
                     href={`/track?ref=${encodeURIComponent(createdQuoteRef)}`}
                     onClick={onClose}
                   >
                     <Button variant="primary" size="sm">
+                      <Magnifier className="size-3.5" />
                       Track Quotation
                     </Button>
-                  </Link>
-                  <Link
+                  </NextLink>
+                  <NextLink
                     href={`/chat?ref=${encodeURIComponent(createdQuoteRef)}`}
                     onClick={onClose}
                   >
                     <Button variant="secondary" size="sm">
+                      <Comments className="size-3.5" />
                       Consult Support Desk
                     </Button>
-                  </Link>
-                </div>
+                  </NextLink>
+                </Card.Footer>
               </Card>
             ) : (
               <>
                 {/* PER-SIZE SCHEDULE TABLE */}
                 <div className="space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-semibold uppercase tracking-wider text-muted">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted">
                       Size & Volume Schedule ({product.baseUnit})
-                    </h4>
-                    <span className="text-xs text-muted tabular-nums">
-                      Minimum run: {product.minOrderQty} {product.baseUnit}
                     </span>
+                    <Chip size="sm" variant="soft" color="default">
+                      <Chip.Label className="tabular-nums">
+                        Minimum run: {product.minOrderQty} {product.baseUnit}
+                      </Chip.Label>
+                    </Chip>
                   </div>
 
-                  <div className="overflow-hidden rounded-lg border border-separator">
-                    <Table>
-                      <Table.ScrollContainer>
-                        <Table.Content
-                          aria-label={`${product.name} price per size`}
-                        >
-                          <Table.Header>
-                            <Table.Column isRowHeader>Size Option</Table.Column>
-                            <Table.Column>Dimensions</Table.Column>
-                            <Table.Column>Standard</Table.Column>
-                            <Table.Column>100+ Bulk</Table.Column>
-                            <Table.Column>500+ Wholesale</Table.Column>
-                            <Table.Column>Setup</Table.Column>
-                          </Table.Header>
-                          <Table.Body>
-                            {product.sizes.map((sz) => {
-                              const isSelected = sz.id === selectedSize?.id;
-                              return (
-                                <Table.Row
-                                  key={sz.id}
-                                  id={sz.id}
-                                  onAction={() => setSelectedSizeId(sz.id)}
-                                  className={`cursor-pointer transition-colors tabular-nums ${
-                                    isSelected
-                                      ? "bg-accent/10 font-medium"
-                                      : "hover:bg-surface-secondary"
-                                  }`}
-                                >
-                                  <Table.Cell>
-                                    <div className="flex items-center gap-2.5">
-                                      <input
-                                        type="radio"
-                                        checked={isSelected}
-                                        onChange={() =>
-                                          setSelectedSizeId(sz.id)
-                                        }
-                                        className="accent-current"
-                                        aria-label={sz.sizeLabel}
-                                      />
-                                      <span className="font-medium text-foreground">
-                                        {sz.sizeLabel}
-                                      </span>
-                                    </div>
-                                  </Table.Cell>
-                                  <Table.Cell className="font-mono text-xs text-muted">
-                                    {sz.dimensions}
-                                  </Table.Cell>
-                                  <Table.Cell className="font-mono font-medium text-foreground">
-                                    {formatCurrency(sz.unitPrice)}
-                                  </Table.Cell>
-                                  <Table.Cell className="font-mono text-foreground">
-                                    {sz.bulk100Price != null
-                                      ? formatCurrency(sz.bulk100Price)
-                                      : "—"}
-                                  </Table.Cell>
-                                  <Table.Cell className="font-mono font-medium text-accent">
-                                    {sz.bulk500Price != null
-                                      ? formatCurrency(sz.bulk500Price)
-                                      : "—"}
-                                  </Table.Cell>
-                                  <Table.Cell className="font-mono text-xs text-muted">
-                                    {sz.setupFee > 0
-                                      ? formatCurrency(sz.setupFee)
-                                      : "Included"}
-                                  </Table.Cell>
-                                </Table.Row>
-                              );
-                            })}
-                          </Table.Body>
-                        </Table.Content>
-                      </Table.ScrollContainer>
-                    </Table>
-                  </div>
+                  <Table variant="secondary">
+                    <Table.ScrollContainer>
+                      <Table.Content
+                        aria-label={`${product.name} price per size`}
+                        selectionMode="single"
+                        disallowEmptySelection
+                        selectedKeys={
+                          selectedSize ? new Set([selectedSize.id]) : new Set()
+                        }
+                        onSelectionChange={(keys) => {
+                          if (keys !== "all") {
+                            const first = [...keys][0];
+                            if (first) setSelectedSizeId(String(first));
+                          }
+                        }}
+                      >
+                        <Table.Header>
+                          <Table.Column isRowHeader>Size Option</Table.Column>
+                          <Table.Column>Dimensions</Table.Column>
+                          <Table.Column>Standard</Table.Column>
+                          <Table.Column>100+ Bulk</Table.Column>
+                          <Table.Column>500+ Wholesale</Table.Column>
+                          <Table.Column>Setup</Table.Column>
+                        </Table.Header>
+                        <Table.Body>
+                          {product.sizes.map((sz) => (
+                            <Table.Row
+                              key={sz.id}
+                              id={sz.id}
+                              className="cursor-pointer tabular-nums"
+                            >
+                              <Table.Cell className="font-medium text-foreground">
+                                {sz.sizeLabel}
+                              </Table.Cell>
+                              <Table.Cell className="font-mono text-xs text-muted">
+                                {sz.dimensions}
+                              </Table.Cell>
+                              <Table.Cell className="font-mono font-medium text-foreground">
+                                {formatCurrency(sz.unitPrice)}
+                              </Table.Cell>
+                              <Table.Cell className="font-mono text-foreground">
+                                {sz.bulk100Price != null
+                                  ? formatCurrency(sz.bulk100Price)
+                                  : "—"}
+                              </Table.Cell>
+                              <Table.Cell className="font-mono font-semibold text-accent">
+                                {sz.bulk500Price != null
+                                  ? formatCurrency(sz.bulk500Price)
+                                  : "—"}
+                              </Table.Cell>
+                              <Table.Cell className="font-mono text-xs text-muted">
+                                {sz.setupFee > 0
+                                  ? formatCurrency(sz.setupFee)
+                                  : "Included"}
+                              </Table.Cell>
+                            </Table.Row>
+                          ))}
+                        </Table.Body>
+                      </Table.Content>
+                    </Table.ScrollContainer>
+                  </Table>
                 </div>
 
                 {/* SPECIFICATION CONFIGURATOR & LIVE ESTIMATE */}
-                <div className="grid gap-4 rounded-xl border border-separator bg-surface-secondary/50 p-4 md:grid-cols-3">
-                  <div className="space-y-3.5 md:col-span-2">
+                <Surface
+                  variant="secondary"
+                  className="grid gap-5 rounded-3xl p-5 md:grid-cols-3"
+                >
+                  <div className="space-y-4 md:col-span-2">
                     <div className="text-xs font-semibold uppercase tracking-wider text-muted">
                       Specification Parameters
                     </div>
 
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-muted">
-                          Substrate / Paper Stock
-                        </label>
-                        <select
-                          value={selectedMaterial}
-                          onChange={(e) => setSelectedMaterial(e.target.value)}
-                          className="h-9 w-full rounded-lg border border-separator bg-surface px-3 text-sm text-foreground outline-none focus:border-accent"
-                        >
-                          {product.materials.map((m) => (
-                            <option key={m.name} value={m.name}>
-                              {m.name}{" "}
-                              {m.priceMultiplier !== 1
-                                ? `(${m.priceMultiplier > 1 ? "+" : ""}${Math.round(
-                                    (m.priceMultiplier - 1) * 100
-                                  )}%)`
-                                : "(Base)"}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                      <Select
+                        className="w-full"
+                        value={selectedMaterial}
+                        onChange={(key) => {
+                          if (key) setSelectedMaterial(String(key));
+                        }}
+                      >
+                        <Label>Substrate / Paper Stock</Label>
+                        <Select.Trigger>
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+                        <Select.Popover>
+                          <ListBox>
+                            {product.materials.map((m) => {
+                              const textLabel = `${m.name} ${
+                                m.priceMultiplier !== 1
+                                  ? `(${m.priceMultiplier > 1 ? "+" : ""}${Math.round(
+                                      (m.priceMultiplier - 1) * 100
+                                    )}%)`
+                                  : "(Base)"
+                              }`;
+                              return (
+                                <ListBox.Item
+                                  key={m.name}
+                                  id={m.name}
+                                  textValue={textLabel}
+                                >
+                                  {textLabel}
+                                  <ListBox.ItemIndicator />
+                                </ListBox.Item>
+                              );
+                            })}
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
 
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-muted">
-                          Lamination / Finishing
-                        </label>
-                        <select
-                          value={selectedFinish}
-                          onChange={(e) => setSelectedFinish(e.target.value)}
-                          className="h-9 w-full rounded-lg border border-separator bg-surface px-3 text-sm text-foreground outline-none focus:border-accent"
-                        >
-                          {product.finishes.map((f) => (
-                            <option key={f.name} value={f.name}>
-                              {f.name}{" "}
-                              {f.addPerUnit > 0
-                                ? `(+${formatCurrency(f.addPerUnit)})`
-                                : "(Included)"}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                      <Select
+                        className="w-full"
+                        value={selectedFinish}
+                        onChange={(key) => {
+                          if (key) setSelectedFinish(String(key));
+                        }}
+                      >
+                        <Label>Lamination / Finishing</Label>
+                        <Select.Trigger>
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+                        <Select.Popover>
+                          <ListBox>
+                            {product.finishes.map((f) => {
+                              const textLabel = `${f.name} ${
+                                f.addPerUnit > 0
+                                  ? `(+${formatCurrency(f.addPerUnit)})`
+                                  : "(Included)"
+                              }`;
+                              return (
+                                <ListBox.Item
+                                  key={f.name}
+                                  id={f.name}
+                                  textValue={textLabel}
+                                >
+                                  {textLabel}
+                                  <ListBox.ItemIndicator />
+                                </ListBox.Item>
+                              );
+                            })}
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
                     </div>
 
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-muted">
-                        Run Quantity ({product.baseUnit})
-                      </label>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <input
-                          type="number"
-                          min={product.minOrderQty}
-                          value={quantity}
-                          onChange={(e) =>
+                    <div className="flex flex-wrap items-end gap-3">
+                      <NumberField
+                        className="w-40"
+                        minValue={product.minOrderQty || 1}
+                        step={1}
+                        value={quantity}
+                        onChange={(val) => {
+                          if (!Number.isNaN(val)) {
                             setQuantity(
-                              Math.max(
-                                product.minOrderQty || 1,
-                                Number.parseInt(e.target.value || "1", 10)
-                              )
-                            )
+                              Math.max(product.minOrderQty || 1, val)
+                            );
                           }
-                          className="h-9 w-28 rounded-lg border border-separator bg-surface px-3 font-mono text-sm font-medium text-foreground outline-none focus:border-accent tabular-nums"
-                        />
-                        {[product.minOrderQty, 50, 100, 250, 500]
-                          .filter(
-                            (v, idx, arr) =>
-                              v >= product.minOrderQty && arr.indexOf(v) === idx
-                          )
-                          .map((preset) => (
-                            <button
-                              key={preset}
-                              type="button"
-                              onClick={() => setQuantity(preset)}
-                              className={`h-9 rounded-lg border px-2.5 font-mono text-xs font-medium transition-colors tabular-nums ${
-                                quantity === preset
-                                  ? "border-foreground bg-foreground text-background"
-                                  : "border-separator bg-surface text-muted hover:text-foreground"
-                              }`}
-                            >
-                              {preset}
-                            </button>
-                          ))}
-                      </div>
+                        }}
+                      >
+                        <Label>Run Quantity ({product.baseUnit})</Label>
+                        <NumberField.Group>
+                          <NumberField.DecrementButton />
+                          <NumberField.Input className="tabular-nums" />
+                          <NumberField.IncrementButton />
+                        </NumberField.Group>
+                      </NumberField>
+
+                      <ToggleButtonGroup
+                        aria-label="Preset quantities"
+                        size="sm"
+                        selectionMode="single"
+                        selectedKeys={
+                          presetQuantities.includes(quantity)
+                            ? new Set([String(quantity)])
+                            : new Set()
+                        }
+                        onSelectionChange={(keys) => {
+                          const first = [...keys][0];
+                          if (first) setQuantity(Number(first));
+                        }}
+                      >
+                        {presetQuantities.map((preset, idx) => (
+                          <ToggleButton
+                            key={preset}
+                            id={String(preset)}
+                            className="tabular-nums"
+                          >
+                            {idx > 0 && <ToggleButtonGroup.Separator />}
+                            {preset}
+                          </ToggleButton>
+                        ))}
+                      </ToggleButtonGroup>
                     </div>
                   </div>
 
-                  {/* Itemized Summary */}
-                  <div className="flex flex-col justify-between rounded-lg border border-separator bg-surface p-4 tabular-nums">
-                    <div className="space-y-2 text-xs">
+                  {/* Itemized Summary Card */}
+                  <Card className="justify-between tabular-nums">
+                    <Card.Content className="space-y-2.5 text-xs">
                       <div className="flex items-center justify-between">
                         <span className="text-muted">Rate Schedule</span>
-                        <Chip size="sm" color="default" variant="secondary">
-                          {breakdown.appliedTier}
+                        <Chip size="sm" color="accent" variant="soft">
+                          <Chip.Label>{breakdown.appliedTier}</Chip.Label>
                         </Chip>
                       </div>
                       <div className="flex items-center justify-between text-muted">
@@ -556,18 +639,17 @@ export function ProductPriceModal({
                           {formatCurrency(taxAmount)}
                         </span>
                       </div>
-                    </div>
-
-                    <div className="mt-4 border-t border-separator pt-3">
-                      <div className="text-[11px] font-medium uppercase tracking-wider text-muted">
+                    </Card.Content>
+                    <Card.Footer className="flex-col items-start border-t border-separator pt-3">
+                      <span className="text-[11px] font-medium uppercase tracking-wider text-muted">
                         Estimated Total
-                      </div>
-                      <div className="mt-0.5 font-mono text-xl font-semibold text-foreground">
+                      </span>
+                      <span className="mt-0.5 font-mono text-xl font-semibold text-foreground">
                         {formatCurrency(estimatedGrandTotal)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                      </span>
+                    </Card.Footer>
+                  </Card>
+                </Surface>
 
                 {/* ORDER / QUOTE FORM */}
                 {actionMode === "browse" ? (
@@ -579,6 +661,7 @@ export function ProductPriceModal({
                         setActionMode("quote");
                       }}
                     >
+                      <FileText className="size-4" />
                       Request Formal Quote
                     </Button>
                     <Button
@@ -588,166 +671,226 @@ export function ProductPriceModal({
                         setActionMode("order");
                       }}
                     >
+                      <ShoppingBag className="size-4" />
                       Place Direct Order
                     </Button>
                   </div>
                 ) : (
-                  <form
-                    onSubmit={
-                      actionMode === "order"
-                        ? handlePlaceOrder
-                        : handleRequestQuote
-                    }
-                    className="space-y-4 rounded-xl border border-separator bg-surface p-4"
-                  >
-                    <div className="flex items-center justify-between border-b border-separator pb-3">
-                      <h4 className="text-sm font-semibold text-foreground">
-                        {actionMode === "order"
-                          ? "Direct Production Order"
-                          : "Formal Quotation Inquiry"}
-                      </h4>
-                      <button
-                        type="button"
-                        onClick={() => {
+                  <Card variant="secondary">
+                    <Card.Header className="flex-row items-center justify-between">
+                      <div>
+                        <Card.Title>
+                          {actionMode === "order"
+                            ? "Direct Production Order"
+                            : "Formal Quotation Inquiry"}
+                        </Card.Title>
+                        <Card.Description>
+                          {actionMode === "order"
+                            ? "Submit job specifications and generate your production reference."
+                            : "Request a formal quotation reviewed by our estimating desk."}
+                        </Card.Description>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="tertiary"
+                        onPress={() => {
                           setSubmitError(null);
                           setActionMode("browse");
                         }}
-                        className="text-xs text-muted hover:text-foreground"
                       >
                         Cancel
-                      </button>
-                    </div>
-
-                    {submitError && (
-                      <div className="flex items-center gap-2 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
-                        <AlertCircle className="h-4 w-4 shrink-0" />
-                        <span>{submitError}</span>
-                      </div>
-                    )}
-
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-muted">
-                          Contact Name *
-                        </label>
-                        <input
-                          required
-                          value={customerName}
-                          onChange={(e) => setCustomerName(e.target.value)}
-                          placeholder="Full name"
-                          className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-muted">
-                          Email Address *
-                        </label>
-                        <input
-                          required
-                          type="email"
-                          value={customerEmail}
-                          onChange={(e) => setCustomerEmail(e.target.value)}
-                          placeholder="name@company.com"
-                          className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-muted">
-                          Telephone / Mobile *
-                        </label>
-                        <input
-                          required
-                          value={customerPhone}
-                          onChange={(e) => setCustomerPhone(e.target.value)}
-                          placeholder="+63 917 000 0000"
-                          className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
-                        />
-                      </div>
-                    </div>
-
-                    {actionMode === "order" ? (
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-muted">
-                            Fulfillment Method
-                          </label>
-                          <select
-                            value={deliveryMethod}
-                            onChange={(e) =>
-                              setDeliveryMethod(
-                                e.target.value as "pickup" | "courier"
-                              )
-                            }
-                            className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
-                          >
-                            <option value="pickup">
-                              Studio Pickup ({settings.shopName})
-                            </option>
-                            <option value="courier">
-                              Courier Dispatch (Client-Arranged / Freight)
-                            </option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-muted">
-                            Settlement Channel
-                          </label>
-                          <select
-                            value={paymentMethod}
-                            onChange={(e) => setPaymentMethod(e.target.value)}
-                            className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
-                          >
-                            <option value="gcash_ewallet">
-                              GCash / Maya E-Wallet
-                            </option>
-                            <option value="bank_transfer">
-                              Corporate Bank Transfer (BDO / BPI)
-                            </option>
-                            <option value="cash">Counter Settlement</option>
-                          </select>
-                        </div>
-                      </div>
-                    ) : (
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-muted">
-                          Custom Trim Dimensions / Dieline Notes (Optional)
-                        </label>
-                        <input
-                          value={customDimensions}
-                          onChange={(e) => setCustomDimensions(e.target.value)}
-                          placeholder="e.g., 4.25 × 6.5 in custom die-cut with foil stamping"
-                          className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
-                        />
-                      </div>
-                    )}
-
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-muted">
-                        Artwork File Link (HTTPS) & Production Instructions
-                      </label>
-                      <textarea
-                        rows={2}
-                        value={customNotes}
-                        onChange={(e) => setCustomNotes(e.target.value)}
-                        placeholder="Provide Google Drive / Dropbox link, Pantone references, SKU split, or target completion date..."
-                        className="w-full rounded-lg border border-separator bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
-                      />
-                    </div>
-
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        type="submit"
-                        variant="primary"
-                        isDisabled={submitting}
-                      >
-                        {submitting
-                          ? "Submitting..."
-                          : actionMode === "order"
-                            ? `Submit Order (${formatCurrency(estimatedGrandTotal)})`
-                            : "Submit Quotation Inquiry"}
                       </Button>
-                    </div>
-                  </form>
+                    </Card.Header>
+                    <Card.Content>
+                      <Form
+                        onSubmit={
+                          actionMode === "order"
+                            ? handlePlaceOrder
+                            : handleRequestQuote
+                        }
+                        className="flex flex-col gap-4"
+                      >
+                        {submitError && (
+                          <Alert status="danger">
+                            <Alert.Indicator />
+                            <Alert.Content>
+                              <Alert.Title>Submission Error</Alert.Title>
+                              <Alert.Description>
+                                {submitError}
+                              </Alert.Description>
+                            </Alert.Content>
+                          </Alert>
+                        )}
+
+                        <div className="grid gap-3 sm:grid-cols-3">
+                          <TextField
+                            isRequired
+                            name="customerName"
+                            value={customerName}
+                            onChange={setCustomerName}
+                          >
+                            <Label>Contact Name</Label>
+                            <Input placeholder="Full name" />
+                            <FieldError />
+                          </TextField>
+
+                          <TextField
+                            isRequired
+                            name="customerEmail"
+                            type="email"
+                            value={customerEmail}
+                            onChange={setCustomerEmail}
+                          >
+                            <Label>Email Address</Label>
+                            <Input placeholder="name@company.com" />
+                            <FieldError />
+                          </TextField>
+
+                          <TextField
+                            isRequired
+                            name="customerPhone"
+                            type="tel"
+                            value={customerPhone}
+                            onChange={setCustomerPhone}
+                          >
+                            <Label>Telephone / Mobile</Label>
+                            <Input placeholder="+63 917 000 0000" />
+                            <FieldError />
+                          </TextField>
+                        </div>
+
+                        {actionMode === "order" ? (
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <Select
+                              className="w-full"
+                              value={deliveryMethod}
+                              onChange={(key) => {
+                                if (key)
+                                  setDeliveryMethod(
+                                    key as "pickup" | "courier"
+                                  );
+                              }}
+                            >
+                              <Label>Fulfillment Method</Label>
+                              <Select.Trigger>
+                                <Select.Value />
+                                <Select.Indicator />
+                              </Select.Trigger>
+                              <Select.Popover>
+                                <ListBox>
+                                  <ListBox.Item
+                                    id="pickup"
+                                    textValue={`Studio Pickup (${settings.shopName})`}
+                                  >
+                                    Studio Pickup ({settings.shopName})
+                                    <ListBox.ItemIndicator />
+                                  </ListBox.Item>
+                                  <ListBox.Item
+                                    id="courier"
+                                    textValue="Courier Dispatch (Client-Arranged / Freight)"
+                                  >
+                                    Courier Dispatch (Client-Arranged / Freight)
+                                    <ListBox.ItemIndicator />
+                                  </ListBox.Item>
+                                </ListBox>
+                              </Select.Popover>
+                            </Select>
+
+                            <Select
+                              className="w-full"
+                              value={paymentMethod}
+                              onChange={(key) => {
+                                if (key) setPaymentMethod(String(key));
+                              }}
+                            >
+                              <Label>Settlement Channel</Label>
+                              <Select.Trigger>
+                                <Select.Value />
+                                <Select.Indicator />
+                              </Select.Trigger>
+                              <Select.Popover>
+                                <ListBox>
+                                  <ListBox.Item
+                                    id="gcash_ewallet"
+                                    textValue="GCash / Maya E-Wallet"
+                                  >
+                                    GCash / Maya E-Wallet
+                                    <ListBox.ItemIndicator />
+                                  </ListBox.Item>
+                                  <ListBox.Item
+                                    id="bank_transfer"
+                                    textValue="Corporate Bank Transfer (BDO / BPI)"
+                                  >
+                                    Corporate Bank Transfer (BDO / BPI)
+                                    <ListBox.ItemIndicator />
+                                  </ListBox.Item>
+                                  <ListBox.Item
+                                    id="cash"
+                                    textValue="Counter Settlement"
+                                  >
+                                    Counter Settlement
+                                    <ListBox.ItemIndicator />
+                                  </ListBox.Item>
+                                </ListBox>
+                              </Select.Popover>
+                            </Select>
+                          </div>
+                        ) : (
+                          <TextField
+                            name="customDimensions"
+                            value={customDimensions}
+                            onChange={setCustomDimensions}
+                          >
+                            <Label>
+                              Custom Trim Dimensions / Dieline Notes (Optional)
+                            </Label>
+                            <Input placeholder="e.g., 4.25 × 6.5 in custom die-cut with foil stamping" />
+                          </TextField>
+                        )}
+
+                        <TextField
+                          name="customNotes"
+                          value={customNotes}
+                          onChange={setCustomNotes}
+                        >
+                          <Label>
+                            Artwork File Link (HTTPS) & Production Instructions
+                          </Label>
+                          <TextArea
+                            rows={2}
+                            placeholder="Provide Google Drive / Dropbox link, Pantone references, SKU split, or target completion date..."
+                          />
+                          <Description>
+                            Include print-ready PDF links or special finishing
+                            notes.
+                          </Description>
+                        </TextField>
+
+                        <Separator />
+
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            type="submit"
+                            variant="primary"
+                            isPending={submitting}
+                          >
+                            {({ isPending }) => (
+                              <>
+                                {isPending && (
+                                  <Spinner color="current" size="sm" />
+                                )}
+                                {isPending
+                                  ? "Submitting..."
+                                  : actionMode === "order"
+                                    ? `Submit Order (${formatCurrency(estimatedGrandTotal)})`
+                                    : "Submit Quotation Inquiry"}
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </Form>
+                    </Card.Content>
+                  </Card>
                 )}
               </>
             )}

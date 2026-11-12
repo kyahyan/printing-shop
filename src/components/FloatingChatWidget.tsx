@@ -1,16 +1,34 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
-import Link from "next/link";
-import { Button, Chip } from "@heroui/react";
+import { usePathname, useRouter } from "next/navigation";
 import {
-  AlertCircle,
-  Maximize2,
-  MessageSquare,
-  Minimize2,
-  Send,
-} from "lucide-react";
+  ArrowsExpand,
+  Comments,
+  Headphones,
+  Minus,
+  PaperPlane,
+  Plus,
+} from "@gravity-ui/icons";
+import {
+  Alert,
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  Chip,
+  Form,
+  Input,
+  Label,
+  ListBox,
+  ScrollShadow,
+  Select,
+  Spinner,
+  Surface,
+  TextArea,
+  TextField,
+  Tooltip,
+} from "@heroui/react";
 import { usePrintShop } from "@/context/PrintShopContext";
 import type { TicketPriority } from "@/types/printshop";
 import {
@@ -20,6 +38,7 @@ import {
 
 export function FloatingChatWidget() {
   const pathname = usePathname();
+  const router = useRouter();
   const {
     currentUser,
     tickets,
@@ -68,7 +87,6 @@ export function FloatingChatWidget() {
     return () => clearInterval(interval);
   }, [activeTicket?.id, activeTicket?.status, isOpen, refreshTicketSession]);
 
-  // Hide widget on staff workspaces and the dedicated /chat page
   if (
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/admin") ||
@@ -82,7 +100,7 @@ export function FloatingChatWidget() {
     ? activeTicket.queuePosition ?? (getQueuePosition(activeTicket.id) || 1)
     : 0;
 
-  const handleStartTicket = async (e: React.FormEvent) => {
+  const handleStartTicket = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!firstMessage.trim() || submitting) return;
     setError(null);
@@ -108,7 +126,7 @@ export function FloatingChatWidget() {
     }
   };
 
-  const handleSendReply = async (e: React.FormEvent) => {
+  const handleSendReply = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!activeTicket || !replyText.trim()) return;
     setError(null);
@@ -136,260 +154,354 @@ export function FloatingChatWidget() {
   return (
     <div className="fixed bottom-5 right-5 z-50">
       {isOpen ? (
-        <div className="flex h-[500px] w-[360px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-xl border border-separator bg-surface shadow-overlay">
+        <Card className="flex h-[540px] w-[370px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden p-0 shadow-overlay">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-separator bg-foreground px-4 py-3 text-background">
-            <div>
-              <div className="text-xs font-semibold tracking-tight">
-                Support & Estimating Desk
-              </div>
-              <div className="text-[11px] opacity-75">
-                Live Ticket Queue
+          <div className="flex items-center justify-between border-b border-separator bg-surface px-4 py-3">
+            <div className="flex items-center gap-2.5">
+              <Badge.Anchor>
+                <Avatar size="sm" color="accent">
+                  <Avatar.Fallback>
+                    <Headphones className="size-4" />
+                  </Avatar.Fallback>
+                </Avatar>
+                <Badge color="success" placement="bottom-right" size="sm" />
+              </Badge.Anchor>
+              <div>
+                <div className="text-sm font-semibold tracking-tight text-foreground leading-none">
+                  Support & Estimating
+                </div>
+                <div className="mt-1 text-xs text-muted leading-none">
+                  Live Ticket Queue
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <Link
-                href="/chat"
-                className="rounded p-1.5 opacity-80 transition-opacity hover:opacity-100"
-                title="Open full support view"
-              >
-                <Maximize2 className="h-3.5 w-3.5" />
-              </Link>
-              <button
-                type="button"
-                onClick={() => setIsOpen(false)}
-                className="rounded p-1.5 opacity-80 transition-opacity hover:opacity-100"
-                aria-label="Minimize support window"
-              >
-                <Minimize2 className="h-3.5 w-3.5" />
-              </button>
+              <Tooltip delay={0}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  isIconOnly
+                  aria-label="Open full support desk"
+                  onPress={() => router.push("/chat")}
+                >
+                  <ArrowsExpand className="size-3.5" />
+                </Button>
+                <Tooltip.Content>
+                  <p>Full support view</p>
+                </Tooltip.Content>
+              </Tooltip>
+
+              <Tooltip delay={0}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  isIconOnly
+                  aria-label="Minimize support widget"
+                  onPress={() => setIsOpen(false)}
+                >
+                  <Minus className="size-4" />
+                </Button>
+                <Tooltip.Content>
+                  <p>Minimize</p>
+                </Tooltip.Content>
+              </Tooltip>
             </div>
           </div>
 
           {error && (
-            <div className="flex items-center gap-1.5 border-b border-danger/30 bg-danger/10 px-3 py-2 text-[11px] text-danger">
-              <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-              <span>{error}</span>
+            <div className="px-3 pt-3">
+              <Alert status="danger">
+                <Alert.Indicator />
+                <Alert.Content>
+                  <Alert.Description>{error}</Alert.Description>
+                </Alert.Content>
+              </Alert>
             </div>
           )}
 
           {activeTicket ? (
             <>
               {/* Ticket Queue Status Banner */}
-              <div className="flex items-center justify-between border-b border-separator bg-surface-secondary px-3.5 py-2 text-xs tabular-nums">
+              <Surface
+                variant="secondary"
+                className="flex items-center justify-between border-b border-separator px-4 py-2.5 text-xs tabular-nums"
+              >
                 <div className="flex items-center gap-2">
                   <span className="font-mono font-semibold text-foreground">
                     {activeTicket.ticketNumber}
                   </span>
                   {activeTicket.status === "queued" && (
                     <Chip size="sm" color="warning" variant="soft">
-                      Queue #{queuePos}
+                      <Chip.Label>Queue #{queuePos}</Chip.Label>
                     </Chip>
                   )}
                   {activeTicket.status === "active" && (
                     <Chip size="sm" color="success" variant="soft">
-                      {activeTicket.assignedEmployeeName || "Active"}
+                      <Chip.Label>
+                        {activeTicket.assignedEmployeeName || "Active"}
+                      </Chip.Label>
                     </Chip>
                   )}
                   {(activeTicket.status === "resolved" ||
                     activeTicket.status === "closed") && (
                     <Chip size="sm" color="default" variant="soft">
-                      Resolved
+                      <Chip.Label>Resolved</Chip.Label>
                     </Chip>
                   )}
                 </div>
-                <button
-                  type="button"
-                  onClick={startFreshTicket}
-                  className="text-[11px] font-medium text-accent hover:underline"
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-xs"
+                  onPress={startFreshTicket}
                 >
-                  New Ticket
-                </button>
-              </div>
+                  <Plus className="size-3" />
+                  New
+                </Button>
+              </Surface>
 
               {/* Messages */}
-              <div className="flex-1 space-y-2.5 overflow-y-auto p-3.5">
-                {activeTicket.messages.map((msg) => {
-                  if (msg.senderRole === "system") {
+              <ScrollShadow className="flex-1 p-4">
+                <div className="space-y-3">
+                  {activeTicket.messages.map((msg) => {
+                    if (msg.senderRole === "system") {
+                      return (
+                        <Surface
+                          key={msg.id}
+                          variant="secondary"
+                          className="rounded-xl px-3 py-2 text-center text-[11px] text-muted"
+                        >
+                          {msg.message}
+                        </Surface>
+                      );
+                    }
+                    const isCustomer = msg.senderRole === "customer";
                     return (
                       <div
                         key={msg.id}
-                        className="rounded-md border border-separator bg-surface-secondary/50 px-3 py-1.5 text-center text-[11px] text-muted"
-                      >
-                        {msg.message}
-                      </div>
-                    );
-                  }
-                  const isCustomer = msg.senderRole === "customer";
-                  return (
-                    <div
-                      key={msg.id}
-                      className={`flex flex-col ${
-                        isCustomer ? "items-end" : "items-start"
-                      }`}
-                    >
-                      <span className="mb-0.5 text-[10px] text-muted">
-                        {msg.senderName}
-                      </span>
-                      <div
-                        className={`max-w-[82%] rounded-lg px-3 py-2 text-xs leading-relaxed ${
-                          isCustomer
-                            ? "bg-foreground text-background"
-                            : "border border-separator bg-surface-secondary text-foreground"
+                        className={`flex flex-col ${
+                          isCustomer ? "items-end" : "items-start"
                         }`}
                       >
-                        {msg.message}
+                        <span className="mb-1 text-[10px] text-muted">
+                          {msg.senderName}
+                        </span>
+                        <div
+                          className={`max-w-[84%] rounded-2xl px-3.5 py-2 text-xs leading-relaxed ${
+                            isCustomer
+                              ? "bg-accent text-accent-foreground"
+                              : "bg-default text-foreground"
+                          }`}
+                        >
+                          {msg.message}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              </ScrollShadow>
 
               {/* Reply Input */}
               {activeTicket.status !== "closed" &&
               activeTicket.status !== "resolved" ? (
-                <form
+                <Form
                   onSubmit={handleSendReply}
-                  className="flex items-center gap-2 border-t border-separator p-3"
+                  className="flex flex-row items-center gap-2 border-t border-separator p-3"
                 >
-                  <input
+                  <TextField
+                    aria-label="Message reply"
+                    className="flex-1"
                     value={replyText}
-                    onChange={(e) => setReplyText(e.target.value)}
-                    placeholder="Write a message..."
-                    className="h-9 flex-1 rounded-lg border border-separator bg-background px-3 text-xs text-foreground outline-none focus:border-accent"
-                  />
+                    onChange={setReplyText}
+                  >
+                    <Input
+                      variant="secondary"
+                      placeholder="Write a message..."
+                    />
+                  </TextField>
                   <Button
                     type="submit"
                     variant="primary"
-                    size="sm"
                     isIconOnly
                     aria-label="Send message"
                   >
-                    <Send className="h-3.5 w-3.5" />
+                    <PaperPlane className="size-4" />
                   </Button>
-                </form>
+                </Form>
               ) : (
-                <div className="border-t border-separator p-3 text-center">
+                <div className="border-t border-separator p-3">
                   <Button
+                    fullWidth
                     size="sm"
                     variant="secondary"
                     onPress={startFreshTicket}
                   >
+                    <Plus className="size-3.5" />
                     Open New Ticket
                   </Button>
                 </div>
               )}
             </>
           ) : (
-            <form
-              onSubmit={handleStartTicket}
-              className="flex-1 space-y-3 overflow-y-auto p-4 text-xs"
-            >
-              <p className="leading-relaxed text-muted">
-                Open a ticket to consult on custom quotations, artwork bleeds,
-                or active orders.
-              </p>
-              <div>
-                <label className="mb-1 block font-medium text-foreground">
-                  Name *
-                </label>
-                <input
-                  required
+            <ScrollShadow className="flex-1 p-4">
+              <Form
+                onSubmit={handleStartTicket}
+                className="flex flex-col gap-3"
+              >
+                <p className="text-xs leading-relaxed text-muted">
+                  Open a ticket to consult on custom quotations, artwork bleeds,
+                  or active orders.
+                </p>
+
+                <TextField
+                  isRequired
+                  name="name"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Full name"
-                  className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-foreground outline-none focus:border-accent"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block font-medium text-foreground">
-                  Email *
-                </label>
-                <input
-                  required
+                  onChange={setName}
+                >
+                  <Label>Name</Label>
+                  <Input variant="secondary" placeholder="Full name" />
+                </TextField>
+
+                <TextField
+                  isRequired
+                  name="email"
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@company.com"
-                  className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-foreground outline-none focus:border-accent"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="mb-1 block font-medium text-foreground">
-                    Topic
-                  </label>
-                  <select
+                  onChange={setEmail}
+                >
+                  <Label>Email</Label>
+                  <Input variant="secondary" placeholder="name@company.com" />
+                </TextField>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  <Select
+                    variant="secondary"
                     value={topic}
-                    onChange={(e) => setTopic(e.target.value)}
-                    className="h-9 w-full rounded-lg border border-separator bg-background px-2.5 text-foreground outline-none focus:border-accent"
+                    onChange={(key) => key && setTopic(String(key))}
                   >
-                    <option value="Quotation Help">Quotation Help</option>
-                    <option value="Pricing Inquiry">Pricing Schedule</option>
-                    <option value="Artwork / File Check">Pre-Press Check</option>
-                    <option value="Order Follow-up">Order Status</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block font-medium text-foreground">
-                    Priority
-                  </label>
-                  <select
+                    <Label>Topic</Label>
+                    <Select.Trigger>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        <ListBox.Item
+                          id="Quotation Help"
+                          textValue="Quotation Help"
+                        >
+                          Quotation Help
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                        <ListBox.Item
+                          id="Pricing Inquiry"
+                          textValue="Pricing Schedule"
+                        >
+                          Pricing Schedule
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                        <ListBox.Item
+                          id="Artwork / File Check"
+                          textValue="Pre-Press Check"
+                        >
+                          Pre-Press Check
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                        <ListBox.Item
+                          id="Order Follow-up"
+                          textValue="Order Status"
+                        >
+                          Order Status
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+
+                  <Select
+                    variant="secondary"
                     value={priority}
-                    onChange={(e) =>
-                      setPriority(e.target.value as TicketPriority)
+                    onChange={(key) =>
+                      key && setPriority(key as TicketPriority)
                     }
-                    className="h-9 w-full rounded-lg border border-separator bg-background px-2.5 text-foreground outline-none focus:border-accent"
                   >
-                    <option value="normal">Standard</option>
-                    <option value="high">Time-Sensitive</option>
-                    <option value="urgent">Same-Day Rush</option>
-                  </select>
+                    <Label>Priority</Label>
+                    <Select.Trigger>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        <ListBox.Item id="normal" textValue="Standard">
+                          Standard
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                        <ListBox.Item id="high" textValue="Time-Sensitive">
+                          Time-Sensitive
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                        <ListBox.Item id="urgent" textValue="Same-Day Rush">
+                          Same-Day Rush
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
                 </div>
-              </div>
-              <div>
-                <label className="mb-1 block font-medium text-foreground">
-                  Reference Code (Optional)
-                </label>
-                <input
+
+                <TextField
+                  name="linkedRef"
                   value={linkedRef}
-                  onChange={(e) => setLinkedRef(e.target.value)}
-                  placeholder="QT-... or ORD-..."
-                  className="h-9 w-full rounded-lg border border-separator bg-background px-3 font-mono text-foreground outline-none placeholder:font-sans focus:border-accent"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block font-medium text-foreground">
-                  Inquiry Details *
-                </label>
-                <textarea
-                  required
-                  rows={2}
+                  onChange={setLinkedRef}
+                >
+                  <Label>Reference Code (Optional)</Label>
+                  <Input
+                    variant="secondary"
+                    placeholder="QT-... or ORD-..."
+                    className="font-mono placeholder:font-sans"
+                  />
+                </TextField>
+
+                <TextField
+                  isRequired
+                  name="firstMessage"
                   value={firstMessage}
-                  onChange={(e) => setFirstMessage(e.target.value)}
-                  placeholder="Describe your specifications or question..."
-                  className="w-full rounded-lg border border-separator bg-background px-3 py-2 text-foreground outline-none focus:border-accent"
-                />
-              </div>
-              <Button
-                type="submit"
-                variant="primary"
-                fullWidth
-                isDisabled={submitting}
-              >
-                {submitting ? "Connecting..." : "Enter Support Queue"}
-              </Button>
-            </form>
+                  onChange={setFirstMessage}
+                >
+                  <Label>Inquiry Details</Label>
+                  <TextArea
+                    variant="secondary"
+                    rows={2}
+                    placeholder="Describe your specifications or question..."
+                  />
+                </TextField>
+
+                <Button
+                  type="submit"
+                  variant="primary"
+                  fullWidth
+                  isPending={submitting}
+                >
+                  {({ isPending }) => (
+                    <>
+                      {isPending && <Spinner color="current" size="sm" />}
+                      {isPending ? "Connecting..." : "Enter Support Queue"}
+                    </>
+                  )}
+                </Button>
+              </Form>
+            </ScrollShadow>
           )}
-        </div>
+        </Card>
       ) : (
         <Button
           variant="primary"
-          size="md"
-          className="rounded-lg shadow-overlay px-4"
+          size="lg"
+          className="shadow-overlay"
           onPress={() => setIsOpen(true)}
         >
-          <MessageSquare className="h-4 w-4" />
+          <Comments className="size-4" />
           <span className="tabular-nums">
             {activeTicket && activeTicket.status !== "resolved"
               ? `${activeTicket.ticketNumber} (${

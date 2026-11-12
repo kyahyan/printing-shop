@@ -1,17 +1,52 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { Button, Card, Chip, Tabs } from "@heroui/react";
+import NextLink from "next/link";
 import {
-  AlertCircle,
-  CheckCircle2,
+  ArrowUpRightFromSquare,
+  Check,
+  Comments,
   Copy,
-  ExternalLink,
+  FileText,
+  Gear,
+  Headphones,
+  PaperPlane,
   Plus,
-  Send,
-  Trash2,
-} from "lucide-react";
+  ShieldCheck,
+  ShoppingBag,
+  TrashBin,
+  Tray,
+} from "@gravity-ui/icons";
+import {
+  Alert,
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  Chip,
+  EmptyState,
+  FieldError,
+  Form,
+  Input,
+  Label,
+  Link,
+  ListBox,
+  NumberField,
+  ScrollShadow,
+  Select,
+  Separator,
+  Spinner,
+  Surface,
+  Switch,
+  Table,
+  Tabs,
+  TextArea,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
+  toast,
+} from "@heroui/react";
 import { usePrintShop } from "@/context/PrintShopContext";
 import type {
   OrderItem,
@@ -185,28 +220,34 @@ export default function EmployeeDashboardPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-7xl px-4 py-20 text-center text-sm text-muted">
-        Loading Operations Desk...
+      <div className="mx-auto flex max-w-7xl items-center justify-center gap-3 px-4 py-20 text-sm text-muted">
+        <Spinner size="sm" />
+        <span>Loading Operations Desk...</span>
       </div>
     );
   }
 
   if (!isAuthorized) {
     return (
-      <div className="mx-auto max-w-md px-4 py-20 text-center">
-        <Card className="border border-separator bg-surface p-8 space-y-4">
-          <h1 className="text-lg font-semibold text-foreground">
-            Staff Authorization Required
-          </h1>
-          <p className="text-xs leading-relaxed text-muted">
-            Sign in with an active Employee or Super Administrator account to
-            access quotations, counter POS orders, and the support queue.
-          </p>
-          <div className="flex justify-center">
-            <Link href="/staff/login">
+      <div className="mx-auto max-w-md px-4 py-20">
+        <Card className="p-8 text-center">
+          <Card.Header className="items-center">
+            <div className="mb-2 flex size-11 items-center justify-center rounded-2xl bg-accent-soft text-accent-soft-foreground">
+              <ShieldCheck className="size-5" />
+            </div>
+            <Card.Title className="text-lg">
+              Staff Authorization Required
+            </Card.Title>
+            <Card.Description>
+              Sign in with an active Employee or Super Administrator account to
+              access quotations, counter POS orders, and the support queue.
+            </Card.Description>
+          </Card.Header>
+          <Card.Footer className="justify-center pt-2">
+            <NextLink href="/staff/login">
               <Button variant="primary">Open Staff Portal</Button>
-            </Link>
-          </div>
+            </NextLink>
+          </Card.Footer>
         </Card>
       </div>
     );
@@ -245,7 +286,7 @@ export default function EmployeeDashboardPage() {
     ? sanitizeExternalUrl(selectedInquiry.artworkUrl)
     : null;
 
-  const handleSendQuoteSubmit = async (e: React.FormEvent) => {
+  const handleSendQuoteSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!selectedInquiry) return;
     setDeskError(null);
@@ -257,11 +298,11 @@ export default function EmployeeDashboardPage() {
         staffRemarks: quoteRemarks,
         validUntil: quoteValidUntil,
       });
-      setQuoteSavedToast(
-        `Quotation ${selectedInquiry.referenceNumber} published (${formatCurrency(
-          computedQuoteTotal
-        )}).`
-      );
+      const msg = `Quotation ${selectedInquiry.referenceNumber} published (${formatCurrency(
+        computedQuoteTotal
+      )}).`;
+      setQuoteSavedToast(msg);
+      toast.success(msg);
       setTimeout(() => setQuoteSavedToast(null), 3500);
     } catch (err) {
       setDeskError(
@@ -279,9 +320,9 @@ export default function EmployeeDashboardPage() {
         deliveryMethod: "pickup",
       });
       if (ord) {
-        setQuoteSavedToast(
-          `Converted quotation to Production Order ${ord.referenceNumber}.`
-        );
+        const msg = `Converted quotation to Order ${ord.referenceNumber}.`;
+        setQuoteSavedToast(msg);
+        toast.success(msg);
         setTimeout(() => setQuoteSavedToast(null), 4000);
       }
     } catch (err) {
@@ -291,7 +332,6 @@ export default function EmployeeDashboardPage() {
     }
   };
 
-  // POS Item Adder
   const handleAddPosItem = () => {
     if (!posProduct) return;
     const sz =
@@ -326,7 +366,9 @@ export default function EmployeeDashboardPage() {
   const posTax = Number(((posTaxable * settings.taxRate) / 100).toFixed(2));
   const posGrandTotal = Number((posTaxable + posTax).toFixed(2));
 
-  const handleCreateWalkInOrder = async (e: React.FormEvent) => {
+  const handleCreateWalkInOrder = async (
+    e: React.FormEvent<HTMLFormElement>
+  ) => {
     e.preventDefault();
     if (draftItems.length === 0) return;
     setDeskError(null);
@@ -354,6 +396,7 @@ export default function EmployeeDashboardPage() {
       });
 
       setCreatedWalkInRef(created.referenceNumber);
+      toast.success(`Counter Order ${created.referenceNumber} issued`);
       setDraftItems([]);
       setPosCustomerName("");
       setPosCustomerEmail("");
@@ -367,16 +410,16 @@ export default function EmployeeDashboardPage() {
     }
   };
 
-  // Chat Queue Handlers
   const handleClaimNext = async () => {
     const claimed = await claimNextQueuedTicket();
     if (claimed) {
       setSelectedTicketId(claimed.id);
       setTicketViewFilter("active");
+      toast.success(`Claimed ticket ${claimed.ticketNumber}`);
     }
   };
 
-  const handleStaffSendChat = async (e: React.FormEvent) => {
+  const handleStaffSendChat = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!selectedTicket || !staffReply.trim()) return;
     setDeskError(null);
@@ -407,95 +450,103 @@ export default function EmployeeDashboardPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-separator pb-5">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted">
-            Operations Workspace · {currentUser.fullName} (
-            {currentUser.department || currentUser.role.replace("_", " ")})
-          </p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
+          <Chip size="sm" variant="soft" color="accent" className="mb-2">
+            <Chip.Label>
+              Operations Workspace · {currentUser.fullName} (
+              {currentUser.department || currentUser.role.replace("_", " ")})
+            </Chip.Label>
+          </Chip>
+          <Typography.Heading
+            level={1}
+            className="text-2xl font-bold tracking-tight"
+          >
             Estimating, Production & Support Desk
-          </h1>
+          </Typography.Heading>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            size="sm"
-            variant={currentUser.isOnline ? "primary" : "secondary"}
-            onPress={() => toggleEmployeeOnline(currentUser.id)}
-          >
-            <span
-              className={`mr-1.5 inline-block h-2 w-2 rounded-full ${
-                currentUser.isOnline
-                  ? "bg-emerald-400"
-                  : "bg-muted"
-              }`}
-            />
-            {currentUser.isOnline ? "On Duty (Queue)" : "Away"}
-          </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <Surface variant="secondary" className="rounded-2xl px-3.5 py-2">
+            <Switch
+              isSelected={Boolean(currentUser.isOnline)}
+              onChange={() => void toggleEmployeeOnline(currentUser.id)}
+            >
+              <Switch.Content className="text-xs font-medium">
+                <Switch.Control>
+                  <Switch.Thumb />
+                </Switch.Control>
+                {currentUser.isOnline ? "On Duty (Queue)" : "Away"}
+              </Switch.Content>
+            </Switch>
+          </Surface>
 
           {currentUser.role === "super_admin" && (
-            <Link href="/admin">
+            <NextLink href="/admin">
               <Button size="sm" variant="secondary">
+                <Gear className="size-3.5" />
                 Administration
               </Button>
-            </Link>
+            </NextLink>
           )}
         </div>
       </div>
 
       {deskError && (
-        <div className="flex items-center gap-2 rounded-lg border border-danger/30 bg-danger/10 px-4 py-2.5 text-xs text-danger">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          <span>{deskError}</span>
-        </div>
+        <Alert status="danger">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>Operations Error</Alert.Title>
+            <Alert.Description>{deskError}</Alert.Description>
+          </Alert.Content>
+        </Alert>
       )}
 
-      {/* Operational KPI Ledger */}
-      <div className="grid grid-cols-2 divide-x divide-y divide-separator overflow-hidden rounded-xl border border-separator bg-surface md:grid-cols-4 md:divide-y-0 tabular-nums">
-        <div className="p-4">
-          <div className="text-xs text-muted">Pending Quotations</div>
-          <div className="mt-1 text-2xl font-semibold text-foreground">
+      {/* Operational KPI Cards */}
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4 tabular-nums">
+        <Card className="p-4">
+          <Card.Description>Pending Quotations</Card.Description>
+          <div className="mt-1 text-2xl font-bold text-foreground">
             {pendingInquiriesCount}
           </div>
-          <div className="mt-0.5 text-[11px] text-muted">
+          <div className="mt-0.5 text-xs text-muted">
             {inquiries.length} total inquiries
           </div>
-        </div>
+        </Card>
 
-        <div className="p-4">
-          <div className="text-xs text-muted">Active Production</div>
-          <div className="mt-1 text-2xl font-semibold text-foreground">
+        <Card className="p-4">
+          <Card.Description>Active Production</Card.Description>
+          <div className="mt-1 text-2xl font-bold text-foreground">
             {activeOrdersCount}
           </div>
-          <div className="mt-0.5 text-[11px] text-muted">
+          <div className="mt-0.5 text-xs text-muted">
             Pre-press, press & finishing
           </div>
-        </div>
+        </Card>
 
-        <div className="p-4">
-          <div className="text-xs text-muted">Queued Support</div>
-          <div className="mt-1 text-2xl font-semibold text-foreground">
+        <Card className="p-4">
+          <Card.Description>Queued Support</Card.Description>
+          <div className="mt-1 text-2xl font-bold text-foreground">
             {queuedTickets.length}
           </div>
-          <div className="mt-0.5 text-[11px] text-muted">
+          <div className="mt-0.5 text-xs text-muted">
             {tickets.filter((t) => t.status === "active").length} active threads
           </div>
-        </div>
+        </Card>
 
-        <div className="p-4">
-          <div className="text-xs text-muted">Ready for Release</div>
-          <div className="mt-1 text-2xl font-semibold text-foreground">
+        <Card className="p-4">
+          <Card.Description>Ready for Release</Card.Description>
+          <div className="mt-1 text-2xl font-bold text-foreground">
             {readyForPickupCount}
           </div>
-          <div className="mt-0.5 text-[11px] text-muted">
+          <div className="mt-0.5 text-xs text-muted">
             Awaiting pickup / dispatch
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* WORKSPACE TABS */}
-      <Tabs defaultSelectedKey="inquiries" className="space-y-5">
+      <Tabs defaultSelectedKey="inquiries" className="w-full">
         <Tabs.ListContainer>
           <Tabs.List aria-label="Operations modules">
             <Tabs.Tab id="inquiries">
@@ -516,114 +567,124 @@ export default function EmployeeDashboardPage() {
         {/* ================================================================
             TAB 1: INQUIRIES & QUOTATIONS DESK
         ================================================================ */}
-        <Tabs.Panel id="inquiries" className="space-y-4">
+        <Tabs.Panel id="inquiries" className="space-y-4 pt-5">
           {quoteSavedToast && (
-            <div className="flex items-center gap-2 rounded-lg border border-separator bg-surface px-4 py-3 text-xs font-medium text-foreground">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              <span>{quoteSavedToast}</span>
-            </div>
+            <Alert status="success">
+              <Alert.Indicator />
+              <Alert.Content>
+                <Alert.Title>Quotation Updated</Alert.Title>
+                <Alert.Description>{quoteSavedToast}</Alert.Description>
+              </Alert.Content>
+            </Alert>
           )}
 
           <div className="grid gap-6 lg:grid-cols-12">
             {/* Left List */}
             <div className="space-y-3 lg:col-span-5">
-              <div className="flex flex-wrap gap-1.5">
+              <ToggleButtonGroup
+                aria-label="Filter quotations"
+                size="sm"
+                selectionMode="single"
+                selectedKeys={new Set([quoteFilter])}
+                onSelectionChange={(keys) => {
+                  const first = [...keys][0];
+                  if (first) setQuoteFilter(String(first));
+                }}
+              >
                 {[
                   { id: "all", label: "All" },
                   { id: "pending_review", label: "Needs Quote" },
                   { id: "quoted", label: "Quoted" },
                   { id: "converted_to_order", label: "Converted" },
-                ].map((f) => (
-                  <button
-                    key={f.id}
-                    type="button"
-                    onClick={() => setQuoteFilter(f.id)}
-                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                      quoteFilter === f.id
-                        ? "bg-foreground text-background"
-                        : "border border-separator bg-surface text-muted hover:text-foreground"
-                    }`}
-                  >
+                ].map((f, idx) => (
+                  <ToggleButton key={f.id} id={f.id}>
+                    {idx > 0 && <ToggleButtonGroup.Separator />}
                     {f.label}
-                  </button>
+                  </ToggleButton>
                 ))}
-              </div>
+              </ToggleButtonGroup>
 
-              <div className="max-h-[620px] space-y-2 overflow-y-auto pr-1">
-                {filteredInquiries.length === 0 ? (
-                  <Card className="border border-separator bg-surface p-8 text-center text-xs text-muted">
-                    No quotation inquiries in this filter.
-                  </Card>
-                ) : (
-                  filteredInquiries.map((inq) => {
-                    const active = selectedInquiry?.id === inq.id;
-                    return (
-                      <Card
-                        key={inq.id}
-                        onClick={() => setSelectedInquiryId(inq.id)}
-                        className={`cursor-pointer border p-4 transition-colors tabular-nums ${
-                          active
-                            ? "border-foreground/40 bg-surface-secondary"
-                            : "border-separator bg-surface hover:bg-surface-secondary/50"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-mono text-xs font-semibold text-foreground">
-                            {inq.referenceNumber}
-                          </span>
-                          <Chip
-                            size="sm"
-                            color={
-                              inq.status === "pending_review"
-                                ? "warning"
-                                : inq.status === "quoted"
-                                  ? "success"
-                                  : "default"
-                            }
-                            variant="soft"
-                          >
-                            {inq.status.replace(/_/g, " ")}
-                          </Chip>
-                        </div>
-                        <div className="mt-1.5 line-clamp-1 text-sm font-medium text-foreground">
-                          {inq.subject}
-                        </div>
-                        <div className="mt-1 text-xs text-muted">
-                          {inq.customerName} · {inq.quantity.toLocaleString()}{" "}
-                          units · {inq.selectedSize}
-                        </div>
-                        {inq.quotedTotal != null && (
-                          <div className="mt-1.5 font-mono text-xs font-semibold text-foreground">
-                            Quoted: {formatCurrency(inq.quotedTotal)}
+              <ScrollShadow className="max-h-[620px] pr-1">
+                <div className="space-y-2.5">
+                  {filteredInquiries.length === 0 ? (
+                    <Card className="p-8">
+                      <EmptyState className="flex flex-col items-center justify-center gap-2 text-center">
+                        <Tray className="size-5 text-muted" />
+                        <span className="text-xs text-muted">
+                          No quotation inquiries in this filter.
+                        </span>
+                      </EmptyState>
+                    </Card>
+                  ) : (
+                    filteredInquiries.map((inq) => {
+                      const active = selectedInquiry?.id === inq.id;
+                      return (
+                        <Card
+                          key={inq.id}
+                          variant={active ? "secondary" : "default"}
+                          onClick={() => setSelectedInquiryId(inq.id)}
+                          className="cursor-pointer p-4 tabular-nums transition-colors"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-mono text-xs font-semibold text-foreground">
+                              {inq.referenceNumber}
+                            </span>
+                            <Chip
+                              size="sm"
+                              color={
+                                inq.status === "pending_review"
+                                  ? "warning"
+                                  : inq.status === "quoted"
+                                    ? "success"
+                                    : "default"
+                              }
+                              variant="soft"
+                            >
+                              <Chip.Label>
+                                {inq.status.replace(/_/g, " ")}
+                              </Chip.Label>
+                            </Chip>
                           </div>
-                        )}
-                      </Card>
-                    );
-                  })
-                )}
-              </div>
+                          <div className="mt-1.5 line-clamp-1 text-sm font-medium text-foreground">
+                            {inq.subject}
+                          </div>
+                          <div className="mt-1 text-xs text-muted">
+                            {inq.customerName} · {inq.quantity.toLocaleString()}{" "}
+                            units · {inq.selectedSize}
+                          </div>
+                          {inq.quotedTotal != null && (
+                            <div className="mt-1.5 font-mono text-xs font-semibold text-accent">
+                              Quoted: {formatCurrency(inq.quotedTotal)}
+                            </div>
+                          )}
+                        </Card>
+                      );
+                    })
+                  )}
+                </div>
+              </ScrollShadow>
             </div>
 
             {/* Right Estimator Composer */}
             <div className="lg:col-span-7">
               {selectedInquiry ? (
-                <Card className="border border-separator bg-surface p-6 space-y-5">
-                  <div className="flex flex-wrap items-start justify-between gap-3 border-b border-separator pb-4">
+                <Card className="p-6">
+                  <Card.Header className="flex-row flex-wrap items-start justify-between gap-3">
                     <div>
                       <span className="font-mono text-base font-semibold text-foreground">
                         {selectedInquiry.referenceNumber}
                       </span>
-                      <h2 className="mt-1 text-base font-semibold text-foreground">
+                      <Card.Title className="mt-1 text-base">
                         {selectedInquiry.subject}
-                      </h2>
-                      <p className="mt-0.5 text-xs text-muted">
+                      </Card.Title>
+                      <Card.Description>
                         {selectedInquiry.customerName} (
                         {selectedInquiry.customerEmail} ·{" "}
                         {selectedInquiry.customerPhone})
                         {selectedInquiry.companyName
                           ? ` — ${selectedInquiry.companyName}`
                           : ""}
-                      </p>
+                      </Card.Description>
                     </div>
 
                     {selectedInquiry.status !== "converted_to_order" &&
@@ -635,196 +696,211 @@ export default function EmployeeDashboardPage() {
                             handleConvertInquiry(selectedInquiry.id)
                           }
                         >
+                          <ShoppingBag className="size-3.5" />
                           Convert to Order
                         </Button>
                       )}
-                  </div>
+                  </Card.Header>
 
-                  {/* Specs Summary */}
-                  <div className="grid gap-3 rounded-lg border border-separator bg-background p-4 text-xs sm:grid-cols-2 tabular-nums">
-                    <div>
-                      <span className="text-muted">Product: </span>
-                      <span className="font-medium text-foreground">
-                        {selectedInquiry.productName}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-muted">Size: </span>
-                      <span className="font-medium text-foreground">
-                        {selectedInquiry.selectedSize}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-muted">Substrate: </span>
-                      <span className="font-medium text-foreground">
-                        {selectedInquiry.material}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-muted">Finishing: </span>
-                      <span className="font-medium text-foreground">
-                        {selectedInquiry.finish}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-muted">Quantity: </span>
-                      <span className="font-mono font-medium text-foreground">
-                        {selectedInquiry.quantity.toLocaleString()}
-                      </span>
-                    </div>
-                    {selectedInquiry.targetDate && (
+                  <Card.Content className="space-y-5 pt-4">
+                    {/* Specs Summary */}
+                    <Surface
+                      variant="secondary"
+                      className="grid gap-3 rounded-2xl p-4 text-xs sm:grid-cols-2 tabular-nums"
+                    >
                       <div>
-                        <span className="text-muted">Target Date: </span>
-                        <span className="font-mono font-medium text-foreground">
-                          {selectedInquiry.targetDate}
-                        </span>
-                      </div>
-                    )}
-                    {selectedInquiry.customDimensions && (
-                      <div className="sm:col-span-2">
-                        <span className="text-muted">Custom Trim: </span>
-                        <span className="font-mono text-foreground">
-                          {selectedInquiry.customDimensions}
-                        </span>
-                      </div>
-                    )}
-                    {selectedInquiry.artworkUrl && (
-                      <div className="sm:col-span-2 flex items-center gap-1.5">
-                        <span className="text-muted">Artwork URL:</span>
-                        {safeArtworkHref ? (
-                          <a
-                            href={safeArtworkHref}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 font-medium text-accent hover:underline"
-                          >
-                            Open Verified HTTPS Link
-                            <ExternalLink className="h-3 w-3" />
-                          </a>
-                        ) : (
-                          <span className="text-danger">
-                            Blocked non-HTTPS link
-                          </span>
-                        )}
-                      </div>
-                    )}
-                    {selectedInquiry.notes && (
-                      <div className="sm:col-span-2 rounded-md border border-separator bg-surface p-2.5 text-muted">
+                        <span className="text-muted">Product: </span>
                         <span className="font-medium text-foreground">
-                          Client Notes:{" "}
+                          {selectedInquiry.productName}
                         </span>
-                        {selectedInquiry.notes}
                       </div>
-                    )}
-                  </div>
-
-                  {/* Estimator Pricing Form */}
-                  <form onSubmit={handleSendQuoteSubmit} className="space-y-4">
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">
-                      Issue Formal Quotation
-                    </h3>
-
-                    <div className="grid gap-3 sm:grid-cols-4 tabular-nums">
                       <div>
-                        <label className="mb-1 block text-xs font-medium text-muted">
-                          Unit Rate ({settings.currencySymbol})
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min={0}
-                          required
+                        <span className="text-muted">Size: </span>
+                        <span className="font-medium text-foreground">
+                          {selectedInquiry.selectedSize}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-muted">Substrate: </span>
+                        <span className="font-medium text-foreground">
+                          {selectedInquiry.material}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-muted">Finishing: </span>
+                        <span className="font-medium text-foreground">
+                          {selectedInquiry.finish}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-muted">Quantity: </span>
+                        <span className="font-mono font-medium text-foreground">
+                          {selectedInquiry.quantity.toLocaleString()}
+                        </span>
+                      </div>
+                      {selectedInquiry.targetDate && (
+                        <div>
+                          <span className="text-muted">Target Date: </span>
+                          <span className="font-mono font-medium text-foreground">
+                            {selectedInquiry.targetDate}
+                          </span>
+                        </div>
+                      )}
+                      {selectedInquiry.customDimensions && (
+                        <div className="sm:col-span-2">
+                          <span className="text-muted">Custom Trim: </span>
+                          <span className="font-mono text-foreground">
+                            {selectedInquiry.customDimensions}
+                          </span>
+                        </div>
+                      )}
+                      {selectedInquiry.artworkUrl && (
+                        <div className="flex items-center gap-1.5 sm:col-span-2">
+                          <span className="text-muted">Artwork URL:</span>
+                          {safeArtworkHref ? (
+                            <Link
+                              href={safeArtworkHref}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs font-medium"
+                            >
+                              Open Verified HTTPS Link
+                              <ArrowUpRightFromSquare className="ml-1 size-3" />
+                            </Link>
+                          ) : (
+                            <Chip size="sm" color="danger" variant="soft">
+                              <Chip.Label>Blocked non-HTTPS link</Chip.Label>
+                            </Chip>
+                          )}
+                        </div>
+                      )}
+                      {selectedInquiry.notes && (
+                        <Surface className="rounded-xl p-3 text-muted sm:col-span-2">
+                          <span className="font-medium text-foreground">
+                            Client Notes:{" "}
+                          </span>
+                          {selectedInquiry.notes}
+                        </Surface>
+                      )}
+                    </Surface>
+
+                    <Separator />
+
+                    {/* Estimator Pricing Form */}
+                    <Form
+                      onSubmit={handleSendQuoteSubmit}
+                      className="flex flex-col gap-4"
+                    >
+                      <div className="text-xs font-semibold uppercase tracking-wider text-muted">
+                        Issue Formal Quotation
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-4 tabular-nums">
+                        <NumberField
+                          isRequired
+                          minValue={0}
+                          step={0.5}
+                          variant="secondary"
                           value={quoteUnitPrice}
-                          onChange={(e) =>
-                            setQuoteUnitPrice(
-                              Number.parseFloat(e.target.value || "0")
-                            )
+                          onChange={(v) =>
+                            !Number.isNaN(v) && setQuoteUnitPrice(v)
                           }
-                          className="h-9 w-full rounded-lg border border-separator bg-background px-3 font-mono text-sm font-medium text-foreground outline-none focus:border-accent"
-                        />
-                      </div>
+                        >
+                          <Label>Unit ({settings.currencySymbol})</Label>
+                          <NumberField.Group>
+                            <NumberField.DecrementButton />
+                            <NumberField.Input />
+                            <NumberField.IncrementButton />
+                          </NumberField.Group>
+                        </NumberField>
 
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-muted">
-                          Setup / Tooling
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min={0}
+                        <NumberField
+                          minValue={0}
+                          step={10}
+                          variant="secondary"
                           value={quoteSetupFee}
-                          onChange={(e) =>
-                            setQuoteSetupFee(
-                              Number.parseFloat(e.target.value || "0")
-                            )
+                          onChange={(v) =>
+                            !Number.isNaN(v) && setQuoteSetupFee(v)
                           }
-                          className="h-9 w-full rounded-lg border border-separator bg-background px-3 font-mono text-sm text-foreground outline-none focus:border-accent"
-                        />
-                      </div>
+                        >
+                          <Label>Setup Fee</Label>
+                          <NumberField.Group>
+                            <NumberField.DecrementButton />
+                            <NumberField.Input />
+                            <NumberField.IncrementButton />
+                          </NumberField.Group>
+                        </NumberField>
 
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-muted">
-                          Discount ({settings.currencySymbol})
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min={0}
+                        <NumberField
+                          minValue={0}
+                          step={10}
+                          variant="secondary"
                           value={quoteDiscount}
-                          onChange={(e) =>
-                            setQuoteDiscount(
-                              Number.parseFloat(e.target.value || "0")
-                            )
+                          onChange={(v) =>
+                            !Number.isNaN(v) && setQuoteDiscount(v)
                           }
-                          className="h-9 w-full rounded-lg border border-separator bg-background px-3 font-mono text-sm text-foreground outline-none focus:border-accent"
-                        />
-                      </div>
+                        >
+                          <Label>Discount</Label>
+                          <NumberField.Group>
+                            <NumberField.DecrementButton />
+                            <NumberField.Input />
+                            <NumberField.IncrementButton />
+                          </NumberField.Group>
+                        </NumberField>
 
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-muted">
-                          Valid Until
-                        </label>
-                        <input
+                        <TextField
+                          name="quoteValidUntil"
                           type="date"
                           value={quoteValidUntil}
-                          onChange={(e) => setQuoteValidUntil(e.target.value)}
-                          className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
-                        />
+                          onChange={setQuoteValidUntil}
+                        >
+                          <Label>Valid Until</Label>
+                          <Input variant="secondary" />
+                        </TextField>
                       </div>
-                    </div>
 
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-muted">
-                        Estimator Breakdown & Terms
-                      </label>
-                      <textarea
-                        rows={2}
+                      <TextField
+                        name="quoteRemarks"
                         value={quoteRemarks}
-                        onChange={(e) => setQuoteRemarks(e.target.value)}
-                        placeholder="Include proof schedule, tooling details, or volume break notes..."
-                        className="w-full rounded-lg border border-separator bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
-                      />
-                    </div>
+                        onChange={setQuoteRemarks}
+                      >
+                        <Label>Estimator Breakdown & Terms</Label>
+                        <TextArea
+                          variant="secondary"
+                          rows={2}
+                          placeholder="Include proof schedule, tooling details, or volume break notes..."
+                        />
+                      </TextField>
 
-                    <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-separator bg-surface-secondary/50 p-4 tabular-nums">
-                      <div>
-                        <div className="text-xs text-muted">
-                          Net Quotation ({selectedInquiry.quantity}×{" "}
-                          {formatCurrency(quoteUnitPrice)} + Setup − Discount)
+                      <Surface
+                        variant="secondary"
+                        className="flex flex-wrap items-center justify-between gap-4 rounded-2xl p-4 tabular-nums"
+                      >
+                        <div>
+                          <div className="text-xs text-muted">
+                            Net Quotation ({selectedInquiry.quantity}×{" "}
+                            {formatCurrency(quoteUnitPrice)} + Setup − Discount)
+                          </div>
+                          <div className="mt-0.5 font-mono text-xl font-semibold text-foreground">
+                            {formatCurrency(computedQuoteTotal)}
+                          </div>
                         </div>
-                        <div className="mt-0.5 font-mono text-xl font-semibold text-foreground">
-                          {formatCurrency(computedQuoteTotal)}
-                        </div>
-                      </div>
-                      <Button type="submit" variant="primary">
-                        Publish Quotation
-                      </Button>
-                    </div>
-                  </form>
+                        <Button type="submit" variant="primary">
+                          <FileText className="size-4" />
+                          Publish Quotation
+                        </Button>
+                      </Surface>
+                    </Form>
+                  </Card.Content>
                 </Card>
               ) : (
-                <Card className="border border-separator bg-surface p-10 text-center text-sm text-muted">
-                  Select an inquiry on the left to prepare an estimate.
+                <Card className="p-10">
+                  <EmptyState className="flex flex-col items-center justify-center gap-2 text-center">
+                    <Tray className="size-6 text-muted" />
+                    <span className="text-sm text-muted">
+                      Select an inquiry on the left to prepare an estimate.
+                    </span>
+                  </EmptyState>
                 </Card>
               )}
             </div>
@@ -834,342 +910,494 @@ export default function EmployeeDashboardPage() {
         {/* ================================================================
             TAB 2: TAKE ORDERS (POS) & PRODUCTION MANAGEMENT
         ================================================================ */}
-        <Tabs.Panel id="orders" className="space-y-8">
+        <Tabs.Panel id="orders" className="space-y-8 pt-5">
           {/* COUNTER ORDER BUILDER */}
-          <Card className="border border-separator bg-surface p-6 space-y-5">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-separator pb-4">
+          <Card className="p-6">
+            <Card.Header className="flex-row flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="text-base font-semibold text-foreground">
+                <Card.Title className="text-base">
                   Counter POS Order Entry
-                </h2>
-                <p className="text-xs text-muted">
+                </Card.Title>
+                <Card.Description>
                   Compose multi-line walk-in or telephone orders with automatic
                   per-size calculation and reference generation.
-                </p>
+                </Card.Description>
               </div>
               {createdWalkInRef && (
-                <div className="flex items-center gap-2 rounded-lg border border-separator bg-surface-secondary px-3.5 py-2 text-xs">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                <Surface
+                  variant="secondary"
+                  className="flex items-center gap-2.5 rounded-2xl px-4 py-2 text-xs"
+                >
+                  <Check className="size-4 text-success" />
                   <span>
                     Issued:{" "}
                     <strong className="font-mono text-foreground">
                       {createdWalkInRef}
                     </strong>
                   </span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      navigator.clipboard.writeText(createdWalkInRef)
-                    }
-                    className="rounded border border-separator bg-surface px-2 py-0.5 text-[11px] font-medium hover:text-accent"
-                  >
-                    <Copy className="mr-1 inline h-3 w-3" />
-                    Copy
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {activeProducts.length === 0 ? (
-              <div className="rounded-lg border border-separator bg-background p-6 text-center text-xs text-muted">
-                No active catalog products configured. Add products in{" "}
-                <Link
-                  href="/admin"
-                  className="font-medium text-accent hover:underline"
-                >
-                  Administration
-                </Link>{" "}
-                to enable counter POS order entry.
-              </div>
-            ) : (
-              <div className="grid items-end gap-3 rounded-lg border border-separator bg-background p-4 sm:grid-cols-12">
-                <div className="sm:col-span-3">
-                  <label className="mb-1 block text-xs font-medium text-muted">
-                    Product Line
-                  </label>
-                  <select
-                    value={posProductId}
-                    onChange={(e) => setPosProductId(e.target.value)}
-                    className="h-9 w-full rounded-lg border border-separator bg-surface px-2.5 text-xs text-foreground outline-none focus:border-accent"
-                  >
-                    {activeProducts.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="sm:col-span-3">
-                  <label className="mb-1 block text-xs font-medium text-muted">
-                    Size Schedule
-                  </label>
-                  <select
-                    value={posSizeId}
-                    onChange={(e) => setPosSizeId(e.target.value)}
-                    className="h-9 w-full rounded-lg border border-separator bg-surface px-2.5 text-xs text-foreground outline-none focus:border-accent"
-                  >
-                    {posProduct?.sizes.map((sz) => (
-                      <option key={sz.id} value={sz.id}>
-                        {sz.sizeLabel} ({formatCurrency(sz.unitPrice)})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="sm:col-span-2">
-                  <label className="mb-1 block text-xs font-medium text-muted">
-                    Substrate
-                  </label>
-                  <select
-                    value={posMaterial}
-                    onChange={(e) => setPosMaterial(e.target.value)}
-                    className="h-9 w-full rounded-lg border border-separator bg-surface px-2.5 text-xs text-foreground outline-none focus:border-accent"
-                  >
-                    {posProduct?.materials.map((m) => (
-                      <option key={m.name} value={m.name}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="sm:col-span-2">
-                  <label className="mb-1 block text-xs font-medium text-muted">
-                    Finish
-                  </label>
-                  <select
-                    value={posFinish}
-                    onChange={(e) => setPosFinish(e.target.value)}
-                    className="h-9 w-full rounded-lg border border-separator bg-surface px-2.5 text-xs text-foreground outline-none focus:border-accent"
-                  >
-                    {posProduct?.finishes.map((f) => (
-                      <option key={f.name} value={f.name}>
-                        {f.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="sm:col-span-1">
-                  <label className="mb-1 block text-xs font-medium text-muted">
-                    Qty
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={posQty}
-                    onChange={(e) =>
-                      setPosQty(
-                        Math.max(1, Number.parseInt(e.target.value || "1", 10))
-                      )
-                    }
-                    className="h-9 w-full rounded-lg border border-separator bg-surface px-2.5 font-mono text-xs font-medium text-foreground outline-none focus:border-accent tabular-nums"
-                  />
-                </div>
-
-                <div className="sm:col-span-1">
                   <Button
                     size="sm"
-                    variant="primary"
-                    fullWidth
-                    className="h-9"
-                    isDisabled={!posProduct}
-                    onPress={handleAddPosItem}
+                    variant="secondary"
+                    onPress={() => {
+                      navigator.clipboard.writeText(createdWalkInRef);
+                      toast.success("Order reference copied");
+                    }}
                   >
-                    <Plus className="h-4 w-4" />
-                    Add
+                    <Copy className="size-3.5" />
+                    Copy
                   </Button>
-                </div>
-              </div>
-            )}
+                </Surface>
+              )}
+            </Card.Header>
 
-            {/* Draft Items + Checkout */}
-            {draftItems.length > 0 && (
-              <form onSubmit={handleCreateWalkInOrder} className="space-y-4">
-                <div className="divide-y divide-separator rounded-lg border border-separator tabular-nums">
-                  {draftItems.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between px-4 py-2.5 text-xs"
+            <Card.Content className="space-y-5 pt-4">
+              {activeProducts.length === 0 ? (
+                <EmptyState className="flex flex-col items-center justify-center gap-3 py-8 text-center">
+                  <Tray className="size-6 text-muted" />
+                  <p className="text-xs text-muted">
+                    No active catalog products configured. Add products in
+                    Administration to enable counter POS order entry.
+                  </p>
+                  {currentUser.role === "super_admin" && (
+                    <NextLink href="/admin">
+                      <Button size="sm" variant="primary">
+                        Open Administration
+                      </Button>
+                    </NextLink>
+                  )}
+                </EmptyState>
+              ) : (
+                <Surface
+                  variant="secondary"
+                  className="grid items-end gap-3 rounded-2xl p-4 sm:grid-cols-12"
+                >
+                  <div className="sm:col-span-3">
+                    <Select
+                      value={posProductId}
+                      onChange={(key) => key && setPosProductId(String(key))}
                     >
-                      <div>
-                        <span className="font-medium text-foreground">
-                          {item.quantity}× {item.productName} — {item.sizeLabel}
-                        </span>
-                        <span className="ml-2 text-muted">
-                          ({item.material} · {item.finish})
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="font-mono font-medium text-foreground">
-                          {formatCurrency(item.lineTotal)}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setDraftItems((prev) =>
-                              prev.filter((x) => x.id !== item.id)
-                            )
-                          }
-                          className="text-muted hover:text-danger"
-                          aria-label="Remove line item"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                      <Label>Product Line</Label>
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          {activeProducts.map((p) => (
+                            <ListBox.Item
+                              key={p.id}
+                              id={p.id}
+                              textValue={p.name}
+                            >
+                              {p.name}
+                              <ListBox.ItemIndicator />
+                            </ListBox.Item>
+                          ))}
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                  </div>
 
-                <div className="grid gap-3 sm:grid-cols-4">
-                  <input
-                    required
-                    value={posCustomerName}
-                    onChange={(e) => setPosCustomerName(e.target.value)}
-                    placeholder="Client Full Name *"
-                    className="h-9 rounded-lg border border-separator bg-background px-3 text-xs text-foreground outline-none focus:border-accent"
-                  />
-                  <input
-                    required
-                    value={posCustomerPhone}
-                    onChange={(e) => setPosCustomerPhone(e.target.value)}
-                    placeholder="Telephone / Mobile *"
-                    className="h-9 rounded-lg border border-separator bg-background px-3 text-xs text-foreground outline-none focus:border-accent"
-                  />
-                  <input
-                    type="email"
-                    value={posCustomerEmail}
-                    onChange={(e) => setPosCustomerEmail(e.target.value)}
-                    placeholder="Client Email (Optional)"
-                    className="h-9 rounded-lg border border-separator bg-background px-3 text-xs text-foreground outline-none focus:border-accent"
-                  />
-                  <input
-                    type="date"
-                    value={posEstDate}
-                    onChange={(e) => setPosEstDate(e.target.value)}
-                    className="h-9 rounded-lg border border-separator bg-background px-3 text-xs text-foreground outline-none focus:border-accent"
-                    title="Scheduled completion date"
-                  />
-                </div>
+                  <div className="sm:col-span-3">
+                    <Select
+                      value={posSizeId}
+                      onChange={(key) => key && setPosSizeId(String(key))}
+                    >
+                      <Label>Size Schedule</Label>
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          {(posProduct?.sizes ?? []).map((sz) => {
+                            const txt = `${sz.sizeLabel} (${formatCurrency(sz.unitPrice)})`;
+                            return (
+                              <ListBox.Item
+                                key={sz.id}
+                                id={sz.id}
+                                textValue={txt}
+                              >
+                                {txt}
+                                <ListBox.ItemIndicator />
+                              </ListBox.Item>
+                            );
+                          })}
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                  </div>
 
-                <div className="grid gap-3 sm:grid-cols-4">
-                  <div>
-                    <label className="mb-1 block text-[11px] text-muted">
-                      Payment Status
-                    </label>
-                    <select
+                  <div className="sm:col-span-2">
+                    <Select
+                      value={posMaterial}
+                      onChange={(key) => key && setPosMaterial(String(key))}
+                    >
+                      <Label>Substrate</Label>
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          {(posProduct?.materials ?? []).map((m) => (
+                            <ListBox.Item
+                              key={m.name}
+                              id={m.name}
+                              textValue={m.name}
+                            >
+                              {m.name}
+                              <ListBox.ItemIndicator />
+                            </ListBox.Item>
+                          ))}
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <Select
+                      value={posFinish}
+                      onChange={(key) => key && setPosFinish(String(key))}
+                    >
+                      <Label>Finish</Label>
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          {(posProduct?.finishes ?? []).map((f) => (
+                            <ListBox.Item
+                              key={f.name}
+                              id={f.name}
+                              textValue={f.name}
+                            >
+                              {f.name}
+                              <ListBox.ItemIndicator />
+                            </ListBox.Item>
+                          ))}
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <NumberField
+                      minValue={1}
+                      step={1}
+                      value={posQty}
+                      onChange={(v) =>
+                        !Number.isNaN(v) && setPosQty(Math.max(1, v))
+                      }
+                    >
+                      <Label>Quantity</Label>
+                      <NumberField.Group>
+                        <NumberField.DecrementButton />
+                        <NumberField.Input className="tabular-nums" />
+                        <NumberField.IncrementButton />
+                      </NumberField.Group>
+                    </NumberField>
+                  </div>
+
+                  <div className="sm:col-span-12 flex justify-end">
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      isDisabled={!posProduct}
+                      onPress={handleAddPosItem}
+                    >
+                      <Plus className="size-4" />
+                      Add Line Item
+                    </Button>
+                  </div>
+                </Surface>
+              )}
+
+              {/* Draft Items + Checkout */}
+              {draftItems.length > 0 && (
+                <Form
+                  onSubmit={handleCreateWalkInOrder}
+                  className="flex flex-col gap-4"
+                >
+                  <Table variant="secondary">
+                    <Table.ScrollContainer>
+                      <Table.Content aria-label="Draft POS line items">
+                        <Table.Header>
+                          <Table.Column isRowHeader>Line Item</Table.Column>
+                          <Table.Column>Stock & Finish</Table.Column>
+                          <Table.Column>Total</Table.Column>
+                          <Table.Column>Action</Table.Column>
+                        </Table.Header>
+                        <Table.Body>
+                          {draftItems.map((item) => (
+                            <Table.Row
+                              key={item.id}
+                              id={item.id}
+                              className="tabular-nums"
+                            >
+                              <Table.Cell className="font-medium text-foreground">
+                                {item.quantity}× {item.productName} —{" "}
+                                {item.sizeLabel}
+                              </Table.Cell>
+                              <Table.Cell className="text-xs text-muted">
+                                {item.material} · {item.finish}
+                              </Table.Cell>
+                              <Table.Cell className="font-mono font-medium text-foreground">
+                                {formatCurrency(item.lineTotal)}
+                              </Table.Cell>
+                              <Table.Cell>
+                                <Button
+                                  size="sm"
+                                  variant="danger-soft"
+                                  isIconOnly
+                                  aria-label="Remove line item"
+                                  onPress={() =>
+                                    setDraftItems((prev) =>
+                                      prev.filter((x) => x.id !== item.id)
+                                    )
+                                  }
+                                >
+                                  <TrashBin className="size-3.5" />
+                                </Button>
+                              </Table.Cell>
+                            </Table.Row>
+                          ))}
+                        </Table.Body>
+                      </Table.Content>
+                    </Table.ScrollContainer>
+                  </Table>
+
+                  <div className="grid gap-3 sm:grid-cols-4">
+                    <TextField
+                      isRequired
+                      name="posCustomerName"
+                      value={posCustomerName}
+                      onChange={setPosCustomerName}
+                    >
+                      <Label>Client Name</Label>
+                      <Input variant="secondary" placeholder="Full name" />
+                      <FieldError />
+                    </TextField>
+
+                    <TextField
+                      isRequired
+                      name="posCustomerPhone"
+                      value={posCustomerPhone}
+                      onChange={setPosCustomerPhone}
+                    >
+                      <Label>Telephone / Mobile</Label>
+                      <Input variant="secondary" placeholder="+63 917..." />
+                      <FieldError />
+                    </TextField>
+
+                    <TextField
+                      name="posCustomerEmail"
+                      type="email"
+                      value={posCustomerEmail}
+                      onChange={setPosCustomerEmail}
+                    >
+                      <Label>Email (Optional)</Label>
+                      <Input
+                        variant="secondary"
+                        placeholder="client@email.com"
+                      />
+                    </TextField>
+
+                    <TextField
+                      name="posEstDate"
+                      type="date"
+                      value={posEstDate}
+                      onChange={setPosEstDate}
+                    >
+                      <Label>Scheduled Completion</Label>
+                      <Input variant="secondary" />
+                    </TextField>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-4">
+                    <Select
+                      variant="secondary"
                       value={posPaymentStatus}
-                      onChange={(e) =>
-                        setPosPaymentStatus(e.target.value as PaymentStatus)
+                      onChange={(key) =>
+                        key && setPosPaymentStatus(key as PaymentStatus)
                       }
-                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-xs text-foreground outline-none focus:border-accent"
                     >
-                      <option value="paid">Paid in Full</option>
-                      <option value="downpayment_paid">50% Downpayment</option>
-                      <option value="unpaid">Unpaid / Invoice</option>
-                    </select>
-                  </div>
+                      <Label>Payment Status</Label>
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="paid" textValue="Paid in Full">
+                            Paid in Full
+                            <ListBox.ItemIndicator />
+                          </ListBox.Item>
+                          <ListBox.Item
+                            id="downpayment_paid"
+                            textValue="50% Downpayment"
+                          >
+                            50% Downpayment
+                            <ListBox.ItemIndicator />
+                          </ListBox.Item>
+                          <ListBox.Item
+                            id="unpaid"
+                            textValue="Unpaid / Invoice"
+                          >
+                            Unpaid / Invoice
+                            <ListBox.ItemIndicator />
+                          </ListBox.Item>
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
 
-                  <div>
-                    <label className="mb-1 block text-[11px] text-muted">
-                      Settlement Channel
-                    </label>
-                    <select
+                    <Select
+                      variant="secondary"
                       value={posPaymentMethod}
-                      onChange={(e) => setPosPaymentMethod(e.target.value)}
-                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-xs text-foreground outline-none focus:border-accent"
+                      onChange={(key) => key && setPosPaymentMethod(String(key))}
                     >
-                      <option value="cash">Counter Cash</option>
-                      <option value="gcash_ewallet">GCash / Maya</option>
-                      <option value="bank_transfer">Bank Transfer</option>
-                      <option value="card">Card Terminal</option>
-                    </select>
-                  </div>
+                      <Label>Settlement Channel</Label>
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="cash" textValue="Counter Cash">
+                            Counter Cash
+                            <ListBox.ItemIndicator />
+                          </ListBox.Item>
+                          <ListBox.Item
+                            id="gcash_ewallet"
+                            textValue="GCash / Maya"
+                          >
+                            GCash / Maya
+                            <ListBox.ItemIndicator />
+                          </ListBox.Item>
+                          <ListBox.Item
+                            id="bank_transfer"
+                            textValue="Bank Transfer"
+                          >
+                            Bank Transfer
+                            <ListBox.ItemIndicator />
+                          </ListBox.Item>
+                          <ListBox.Item id="card" textValue="Card Terminal">
+                            Card Terminal
+                            <ListBox.ItemIndicator />
+                          </ListBox.Item>
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
 
-                  <div>
-                    <label className="mb-1 block text-[11px] text-muted">
-                      Discount ({settings.currencySymbol})
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
+                    <NumberField
+                      minValue={0}
+                      step={10}
+                      variant="secondary"
                       value={posDiscount}
-                      onChange={(e) =>
-                        setPosDiscount(
-                          Number.parseFloat(e.target.value || "0")
-                        )
-                      }
-                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 font-mono text-xs text-foreground outline-none focus:border-accent tabular-nums"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-1 block text-[11px] text-muted">
-                      Fulfillment
-                    </label>
-                    <select
-                      value={posDelivery}
-                      onChange={(e) =>
-                        setPosDelivery(e.target.value as "pickup" | "courier")
-                      }
-                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-xs text-foreground outline-none focus:border-accent"
+                      onChange={(v) => !Number.isNaN(v) && setPosDiscount(v)}
                     >
-                      <option value="pickup">Studio Pickup</option>
-                      <option value="courier">Courier Dispatch</option>
-                    </select>
-                  </div>
-                </div>
+                      <Label>Discount ({settings.currencySymbol})</Label>
+                      <NumberField.Group>
+                        <NumberField.DecrementButton />
+                        <NumberField.Input className="tabular-nums" />
+                        <NumberField.IncrementButton />
+                      </NumberField.Group>
+                    </NumberField>
 
-                <input
-                  value={posNotes}
-                  onChange={(e) => setPosNotes(e.target.value)}
-                  placeholder="Production job ticket notes (file reference, Pantone, finishing instructions)..."
-                  className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-xs text-foreground outline-none focus:border-accent"
-                />
-
-                <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-separator bg-surface-secondary/50 p-4 tabular-nums">
-                  <div className="space-y-0.5 text-xs">
-                    <div className="text-muted">
-                      Subtotal: {formatCurrency(posSubtotal)} · VAT (
-                      {settings.taxRate}%): {formatCurrency(posTax)}
-                    </div>
-                    <div className="font-mono text-lg font-semibold text-foreground">
-                      Total: {formatCurrency(posGrandTotal)}
-                    </div>
+                    <Select
+                      variant="secondary"
+                      value={posDelivery}
+                      onChange={(key) =>
+                        key && setPosDelivery(key as "pickup" | "courier")
+                      }
+                    >
+                      <Label>Fulfillment</Label>
+                      <Select.Trigger>
+                        <Select.Value />
+                        <Select.Indicator />
+                      </Select.Trigger>
+                      <Select.Popover>
+                        <ListBox>
+                          <ListBox.Item id="pickup" textValue="Studio Pickup">
+                            Studio Pickup
+                            <ListBox.ItemIndicator />
+                          </ListBox.Item>
+                          <ListBox.Item
+                            id="courier"
+                            textValue="Courier Dispatch"
+                          >
+                            Courier Dispatch
+                            <ListBox.ItemIndicator />
+                          </ListBox.Item>
+                        </ListBox>
+                      </Select.Popover>
+                    </Select>
                   </div>
-                  <Button type="submit" variant="primary">
-                    Issue Production Order
-                  </Button>
-                </div>
-              </form>
-            )}
+
+                  <TextField
+                    name="posNotes"
+                    value={posNotes}
+                    onChange={setPosNotes}
+                  >
+                    <Label>Production Job Ticket Notes</Label>
+                    <Input
+                      variant="secondary"
+                      placeholder="File reference, Pantone spot inks, finishing notes..."
+                    />
+                  </TextField>
+
+                  <Surface
+                    variant="secondary"
+                    className="flex flex-wrap items-center justify-between gap-4 rounded-2xl p-4 tabular-nums"
+                  >
+                    <div className="space-y-0.5 text-xs">
+                      <div className="text-muted">
+                        Subtotal: {formatCurrency(posSubtotal)} · VAT (
+                        {settings.taxRate}%): {formatCurrency(posTax)}
+                      </div>
+                      <div className="font-mono text-lg font-semibold text-foreground">
+                        Total: {formatCurrency(posGrandTotal)}
+                      </div>
+                    </div>
+                    <Button type="submit" variant="primary">
+                      <ShoppingBag className="size-4" />
+                      Issue Production Order
+                    </Button>
+                  </Surface>
+                </Form>
+              )}
+            </Card.Content>
           </Card>
 
           {/* PRODUCTION ORDERS QUEUE */}
           <div className="space-y-3">
-            <h2 className="text-base font-semibold text-foreground">
+            <Typography.Heading level={2} className="text-lg font-bold">
               Production Schedule ({orders.length})
-            </h2>
+            </Typography.Heading>
             {orders.length === 0 ? (
-              <Card className="border border-separator bg-surface p-8 text-center text-xs text-muted">
-                No production orders logged yet.
+              <Card className="p-8">
+                <EmptyState className="flex flex-col items-center justify-center gap-2 text-center">
+                  <Tray className="size-6 text-muted" />
+                  <span className="text-xs text-muted">
+                    No production orders logged yet.
+                  </span>
+                </EmptyState>
               </Card>
             ) : (
-              <div className="space-y-2.5">
+              <div className="space-y-3">
                 {orders.map((ord) => (
-                  <Card
-                    key={ord.id}
-                    className="border border-separator bg-surface p-5 tabular-nums"
-                  >
+                  <Card key={ord.id} className="p-5 tabular-nums">
                     <div className="flex flex-wrap items-center justify-between gap-4">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <span className="font-mono text-sm font-semibold text-foreground">
                             {ord.referenceNumber}
                           </span>
-                          <Chip size="sm" color="default" variant="secondary">
-                            {ord.orderSource.replace(/_/g, " ")}
+                          <Chip size="sm" color="accent" variant="soft">
+                            <Chip.Label>
+                              {ord.orderSource.replace(/_/g, " ")}
+                            </Chip.Label>
                           </Chip>
                         </div>
                         <div className="text-xs text-muted">
@@ -1186,52 +1414,123 @@ export default function EmployeeDashboardPage() {
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-3 text-xs">
-                        <div>
-                          <label className="mr-1.5 text-muted">Stage:</label>
-                          <select
-                            value={ord.productionStatus}
-                            onChange={(e) =>
-                              updateOrderStatus(ord.id, {
-                                productionStatus: e.target
-                                  .value as ProductionStatus,
-                              })
+                      <div className="flex flex-wrap items-end gap-3 text-xs">
+                        <Select
+                          className="w-44"
+                          variant="secondary"
+                          value={ord.productionStatus}
+                          onChange={(key) => {
+                            if (key) {
+                              void updateOrderStatus(ord.id, {
+                                productionStatus: key as ProductionStatus,
+                              });
                             }
-                            className="h-8 rounded-md border border-separator bg-background px-2.5 font-medium text-foreground outline-none focus:border-accent"
-                          >
-                            <option value="received">01 Received</option>
-                            <option value="prepress_check">02 Pre-Press</option>
-                            <option value="printing">03 Printing</option>
-                            <option value="finishing">04 Finishing</option>
-                            <option value="ready_for_pickup">05 Ready</option>
-                            <option value="completed">06 Completed</option>
-                            <option value="cancelled">Cancelled</option>
-                          </select>
-                        </div>
+                          }}
+                        >
+                          <Label>Production Stage</Label>
+                          <Select.Trigger>
+                            <Select.Value />
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              <ListBox.Item
+                                id="received"
+                                textValue="01 Received"
+                              >
+                                01 Received
+                                <ListBox.ItemIndicator />
+                              </ListBox.Item>
+                              <ListBox.Item
+                                id="prepress_check"
+                                textValue="02 Pre-Press"
+                              >
+                                02 Pre-Press
+                                <ListBox.ItemIndicator />
+                              </ListBox.Item>
+                              <ListBox.Item
+                                id="printing"
+                                textValue="03 Printing"
+                              >
+                                03 Printing
+                                <ListBox.ItemIndicator />
+                              </ListBox.Item>
+                              <ListBox.Item
+                                id="finishing"
+                                textValue="04 Finishing"
+                              >
+                                04 Finishing
+                                <ListBox.ItemIndicator />
+                              </ListBox.Item>
+                              <ListBox.Item
+                                id="ready_for_pickup"
+                                textValue="05 Ready"
+                              >
+                                05 Ready
+                                <ListBox.ItemIndicator />
+                              </ListBox.Item>
+                              <ListBox.Item
+                                id="completed"
+                                textValue="06 Completed"
+                              >
+                                06 Completed
+                                <ListBox.ItemIndicator />
+                              </ListBox.Item>
+                              <ListBox.Item
+                                id="cancelled"
+                                textValue="Cancelled"
+                              >
+                                Cancelled
+                                <ListBox.ItemIndicator />
+                              </ListBox.Item>
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
 
-                        <div>
-                          <label className="mr-1.5 text-muted">Payment:</label>
-                          <select
-                            value={ord.paymentStatus}
-                            onChange={(e) => {
-                              const nextPay = e.target.value as PaymentStatus;
-                              updateOrderStatus(ord.id, {
+                        <Select
+                          className="w-36"
+                          variant="secondary"
+                          value={ord.paymentStatus}
+                          onChange={(key) => {
+                            if (key) {
+                              const nextPay = key as PaymentStatus;
+                              void updateOrderStatus(ord.id, {
                                 paymentStatus: nextPay,
                                 amountPaid:
                                   nextPay === "paid"
                                     ? ord.totalAmount
                                     : ord.amountPaid,
                               });
-                            }}
-                            className="h-8 rounded-md border border-separator bg-background px-2.5 font-medium text-foreground outline-none focus:border-accent"
-                          >
-                            <option value="unpaid">Unpaid</option>
-                            <option value="downpayment_paid">50% DP</option>
-                            <option value="paid">Paid</option>
-                          </select>
-                        </div>
+                            }
+                          }}
+                        >
+                          <Label>Payment</Label>
+                          <Select.Trigger>
+                            <Select.Value />
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              <ListBox.Item id="unpaid" textValue="Unpaid">
+                                Unpaid
+                                <ListBox.ItemIndicator />
+                              </ListBox.Item>
+                              <ListBox.Item
+                                id="downpayment_paid"
+                                textValue="50% DP"
+                              >
+                                50% DP
+                                <ListBox.ItemIndicator />
+                              </ListBox.Item>
+                              <ListBox.Item id="paid" textValue="Paid">
+                                Paid
+                                <ListBox.ItemIndicator />
+                              </ListBox.Item>
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
 
-                        <div className="pl-2 text-right">
+                        <div className="pb-1 pl-2 text-right">
                           <div className="font-mono font-semibold text-foreground">
                             {formatCurrency(ord.totalAmount)}
                           </div>
@@ -1251,15 +1550,15 @@ export default function EmployeeDashboardPage() {
         {/* ================================================================
             TAB 3: CUSTOMER CHAT QUEUE & TICKETING CONSOLE
         ================================================================ */}
-        <Tabs.Panel id="chatqueue">
+        <Tabs.Panel id="chatqueue" className="pt-5">
           <div className="grid gap-6 lg:grid-cols-12">
             {/* Queue Column */}
             <div className="space-y-3 lg:col-span-4">
-              <Card className="border border-separator bg-surface p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold text-foreground tabular-nums">
+              <Card className="p-4">
+                <Card.Header className="flex-row items-center justify-between pb-3">
+                  <Card.Title className="text-sm tabular-nums">
                     Queue ({queuedTickets.length})
-                  </div>
+                  </Card.Title>
                   <Button
                     size="sm"
                     variant="primary"
@@ -1268,142 +1567,201 @@ export default function EmployeeDashboardPage() {
                   >
                     Claim Next
                   </Button>
-                </div>
+                </Card.Header>
 
-                <div className="grid grid-cols-3 gap-1 rounded-lg border border-separator bg-surface-secondary p-1 text-xs tabular-nums">
-                  {(["queued", "active", "resolved"] as const).map((tab) => (
-                    <button
-                      key={tab}
-                      type="button"
-                      onClick={() => setTicketViewFilter(tab)}
-                      className={`rounded-md py-1.5 font-medium capitalize transition-colors ${
-                        ticketViewFilter === tab
-                          ? "bg-surface text-foreground shadow-2xs"
-                          : "text-muted hover:text-foreground"
-                      }`}
-                    >
-                      {tab} (
-                      {
-                        tickets.filter((t) =>
-                          tab === "resolved"
-                            ? t.status === "resolved" || t.status === "closed"
-                            : t.status === tab
-                        ).length
-                      }
-                      )
-                    </button>
-                  ))}
-                </div>
-
-                <div className="max-h-[470px] space-y-2 overflow-y-auto">
-                  {filteredTicketsList.length === 0 ? (
-                    <p className="py-8 text-center text-xs text-muted">
-                      No {ticketViewFilter} tickets.
-                    </p>
-                  ) : (
-                    filteredTicketsList.map((t) => {
-                      const pos = getQueuePosition(t.id);
-                      const isSel = selectedTicket?.id === t.id;
-                      return (
-                        <div
-                          key={t.id}
-                          onClick={() => setSelectedTicketId(t.id)}
-                          className={`cursor-pointer rounded-lg border p-3 transition-colors ${
-                            isSel
-                              ? "border-foreground/40 bg-surface-secondary"
-                              : "border-separator bg-background hover:bg-surface-secondary/50"
-                          }`}
+                <Card.Content className="space-y-3">
+                  <ToggleButtonGroup
+                    aria-label="Filter support queue"
+                    size="sm"
+                    fullWidth
+                    selectionMode="single"
+                    selectedKeys={new Set([ticketViewFilter])}
+                    onSelectionChange={(keys) => {
+                      const first = [...keys][0];
+                      if (first)
+                        setTicketViewFilter(
+                          first as "queued" | "active" | "resolved"
+                        );
+                    }}
+                  >
+                    {(["queued", "active", "resolved"] as const).map(
+                      (tab, idx) => (
+                        <ToggleButton
+                          key={tab}
+                          id={tab}
+                          className="capitalize tabular-nums"
                         >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-mono text-xs font-semibold text-foreground">
-                              {t.ticketNumber}
-                            </span>
-                            <div className="flex items-center gap-1 tabular-nums">
-                              {t.status === "queued" && (
-                                <Chip size="sm" color="warning" variant="soft">
-                                  #{pos}
-                                </Chip>
+                          {idx > 0 && <ToggleButtonGroup.Separator />}
+                          {tab} (
+                          {
+                            tickets.filter((t) =>
+                              tab === "resolved"
+                                ? t.status === "resolved" ||
+                                  t.status === "closed"
+                                : t.status === tab
+                            ).length
+                          }
+                          )
+                        </ToggleButton>
+                      )
+                    )}
+                  </ToggleButtonGroup>
+
+                  <ScrollShadow className="max-h-[460px]">
+                    <div className="space-y-2">
+                      {filteredTicketsList.length === 0 ? (
+                        <EmptyState className="flex flex-col items-center justify-center gap-2 py-8 text-center">
+                          <Comments className="size-5 text-muted" />
+                          <span className="text-xs text-muted">
+                            No {ticketViewFilter} tickets.
+                          </span>
+                        </EmptyState>
+                      ) : (
+                        filteredTicketsList.map((t) => {
+                          const pos = getQueuePosition(t.id);
+                          const isSel = selectedTicket?.id === t.id;
+                          return (
+                            <Surface
+                              key={t.id}
+                              variant={isSel ? "tertiary" : "secondary"}
+                              onClick={() => setSelectedTicketId(t.id)}
+                              className="cursor-pointer rounded-2xl p-3.5 transition-colors hover:bg-default"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-mono text-xs font-semibold text-foreground">
+                                  {t.ticketNumber}
+                                </span>
+                                <div className="flex items-center gap-1 tabular-nums">
+                                  {t.status === "queued" && (
+                                    <Chip
+                                      size="sm"
+                                      color="warning"
+                                      variant="soft"
+                                    >
+                                      <Chip.Label>#{pos}</Chip.Label>
+                                    </Chip>
+                                  )}
+                                  <Chip
+                                    size="sm"
+                                    color={
+                                      t.priority === "urgent"
+                                        ? "danger"
+                                        : t.priority === "high"
+                                          ? "warning"
+                                          : "default"
+                                    }
+                                    variant="soft"
+                                  >
+                                    <Chip.Label>{t.priority}</Chip.Label>
+                                  </Chip>
+                                </div>
+                              </div>
+                              <div className="mt-1 text-xs font-medium text-foreground">
+                                {t.customerName} — {t.topic}
+                              </div>
+                              {t.linkedReference && (
+                                <div className="mt-0.5 font-mono text-[11px] text-muted">
+                                  Ref: {t.linkedReference}
+                                </div>
                               )}
-                              <Chip
-                                size="sm"
-                                color={
-                                  t.priority === "urgent"
-                                    ? "danger"
-                                    : t.priority === "high"
-                                      ? "warning"
-                                      : "default"
-                                }
-                                variant="soft"
-                              >
-                                {t.priority}
-                              </Chip>
-                            </div>
-                          </div>
-                          <div className="mt-1 text-xs font-medium text-foreground">
-                            {t.customerName} — {t.topic}
-                          </div>
-                          {t.linkedReference && (
-                            <div className="mt-0.5 font-mono text-[11px] text-muted">
-                              Ref: {t.linkedReference}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
+                            </Surface>
+                          );
+                        })
+                      )}
+                    </div>
+                  </ScrollShadow>
+                </Card.Content>
               </Card>
             </div>
 
             {/* Active Conversation */}
             <div className="lg:col-span-8">
               {selectedTicket ? (
-                <Card className="flex h-[580px] flex-col overflow-hidden border border-separator bg-surface p-0">
+                <Card className="flex h-[600px] flex-col overflow-hidden p-0">
                   {/* Header */}
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-separator bg-surface-secondary/60 px-5 py-3.5">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-sm font-semibold text-foreground">
-                          {selectedTicket.ticketNumber}
-                        </span>
-                        <span className="text-sm font-medium text-foreground">
-                          {selectedTicket.customerName}
-                        </span>
-                        <span className="text-xs text-muted">
-                          ({selectedTicket.customerEmail})
-                        </span>
-                      </div>
-                      <div className="mt-0.5 text-xs text-muted">
-                        {selectedTicket.topic}
-                        {selectedTicket.linkedReference
-                          ? ` · Ref: ${selectedTicket.linkedReference}`
-                          : ""}
-                        {selectedTicket.assignedEmployeeName
-                          ? ` · Assigned: ${selectedTicket.assignedEmployeeName}`
-                          : ""}
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-separator px-5 py-4">
+                    <div className="flex items-center gap-3">
+                      <Badge.Anchor>
+                        <Avatar size="sm" color="accent">
+                          <Avatar.Fallback>
+                            <Headphones className="size-4" />
+                          </Avatar.Fallback>
+                        </Avatar>
+                        <Badge
+                          color={
+                            selectedTicket.status === "active"
+                              ? "success"
+                              : "warning"
+                          }
+                          placement="bottom-right"
+                          size="sm"
+                        />
+                      </Badge.Anchor>
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-mono text-sm font-semibold text-foreground">
+                            {selectedTicket.ticketNumber}
+                          </span>
+                          <span className="text-sm font-medium text-foreground">
+                            {selectedTicket.customerName}
+                          </span>
+                          <span className="text-xs text-muted">
+                            ({selectedTicket.customerEmail})
+                          </span>
+                        </div>
+                        <div className="mt-0.5 text-xs text-muted">
+                          {selectedTicket.topic}
+                          {selectedTicket.linkedReference
+                            ? ` · Ref: ${selectedTicket.linkedReference}`
+                            : ""}
+                          {selectedTicket.assignedEmployeeName
+                            ? ` · Assigned: ${selectedTicket.assignedEmployeeName}`
+                            : ""}
+                        </div>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <select
+                      <Select
+                        aria-label="Ticket priority"
+                        className="w-32"
+                        variant="secondary"
                         value={selectedTicket.priority}
-                        onChange={(e) =>
-                          updateTicketStatus(selectedTicket.id, {
-                            priority: e.target.value as TicketPriority,
-                          })
-                        }
-                        className="h-8 rounded-md border border-separator bg-surface px-2.5 text-xs text-foreground outline-none focus:border-accent"
+                        onChange={(key) => {
+                          if (key) {
+                            void updateTicketStatus(selectedTicket.id, {
+                              priority: key as TicketPriority,
+                            });
+                          }
+                        }}
                       >
-                        <option value="normal">Standard</option>
-                        <option value="high">High</option>
-                        <option value="urgent">Urgent</option>
-                      </select>
+                        <Select.Trigger>
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+                        <Select.Popover>
+                          <ListBox>
+                            <ListBox.Item id="normal" textValue="Standard">
+                              Standard
+                              <ListBox.ItemIndicator />
+                            </ListBox.Item>
+                            <ListBox.Item id="high" textValue="High">
+                              High
+                              <ListBox.ItemIndicator />
+                            </ListBox.Item>
+                            <ListBox.Item id="urgent" textValue="Urgent">
+                              Urgent
+                              <ListBox.ItemIndicator />
+                            </ListBox.Item>
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
 
                       {selectedTicket.status === "queued" && (
                         <Button
                           size="sm"
                           variant="primary"
-                          onPress={() => claimTicket(selectedTicket.id)}
+                          onPress={() => void claimTicket(selectedTicket.id)}
                         >
                           Claim Ticket
                         </Button>
@@ -1414,97 +1772,118 @@ export default function EmployeeDashboardPage() {
                           size="sm"
                           variant="secondary"
                           onPress={() =>
-                            updateTicketStatus(selectedTicket.id, {
+                            void updateTicketStatus(selectedTicket.id, {
                               status: "resolved",
                             })
                           }
                         >
-                          Mark Resolved
+                          <Check className="size-3.5" />
+                          Resolve
                         </Button>
                       )}
                     </div>
                   </div>
 
-                  {/* Internal Staff Note Bar (Protected by RLS — never exposed via RPC to clients) */}
-                  <div className="flex items-center gap-2 border-b border-separator bg-background px-4 py-2 text-xs">
-                    <span className="shrink-0 font-medium text-muted">
+                  {/* Internal Staff Note Bar (Protected by RLS) */}
+                  <Surface
+                    variant="secondary"
+                    className="flex items-center gap-2 border-b border-separator px-4 py-2"
+                  >
+                    <span className="shrink-0 text-xs font-medium text-muted">
                       Internal Note:
                     </span>
-                    <input
+                    <TextField
+                      aria-label="Internal staff note"
+                      className="flex-1"
                       value={internalNoteDraft}
-                      onChange={(e) => setInternalNoteDraft(e.target.value)}
-                      onBlur={() =>
-                        updateTicketStatus(selectedTicket.id, {
-                          internalNotes: internalNoteDraft,
-                        })
-                      }
-                      placeholder="Private staff handoff note (restricted to staff)..."
-                      className="flex-1 bg-transparent text-foreground outline-none placeholder:text-muted"
-                    />
-                  </div>
+                      onChange={setInternalNoteDraft}
+                    >
+                      <Input
+                        placeholder="Private staff handoff note (restricted to staff)..."
+                        onBlur={() =>
+                          void updateTicketStatus(selectedTicket.id, {
+                            internalNotes: internalNoteDraft,
+                          })
+                        }
+                      />
+                    </TextField>
+                  </Surface>
 
                   {/* Messages */}
-                  <div className="flex-1 space-y-3 overflow-y-auto p-5">
-                    {selectedTicket.messages.map((m) => {
-                      if (m.senderRole === "system") {
+                  <ScrollShadow className="flex-1 p-5">
+                    <div className="space-y-3">
+                      {selectedTicket.messages.map((m) => {
+                        if (m.senderRole === "system") {
+                          return (
+                            <Surface
+                              key={m.id}
+                              variant="secondary"
+                              className="mx-auto max-w-md rounded-xl px-3.5 py-2 text-center text-xs text-muted"
+                            >
+                              {m.message}
+                            </Surface>
+                          );
+                        }
+                        const isEmployee = m.senderRole === "employee";
                         return (
                           <div
                             key={m.id}
-                            className="mx-auto max-w-md rounded-md border border-separator bg-surface-secondary/50 px-3 py-1.5 text-center text-[11px] text-muted"
-                          >
-                            {m.message}
-                          </div>
-                        );
-                      }
-                      const isEmployee = m.senderRole === "employee";
-                      return (
-                        <div
-                          key={m.id}
-                          className={`flex flex-col ${
-                            isEmployee ? "items-end" : "items-start"
-                          }`}
-                        >
-                          <span className="mb-1 text-[11px] text-muted">
-                            {m.senderName} ({m.senderRole})
-                          </span>
-                          <div
-                            className={`max-w-[75%] rounded-xl px-3.5 py-2.5 text-sm leading-relaxed ${
-                              isEmployee
-                                ? "bg-foreground text-background"
-                                : "border border-separator bg-surface-secondary text-foreground"
+                            className={`flex flex-col ${
+                              isEmployee ? "items-end" : "items-start"
                             }`}
                           >
-                            {m.message}
+                            <span className="mb-1 text-[11px] text-muted">
+                              {m.senderName} ({m.senderRole})
+                            </span>
+                            <div
+                              className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                                isEmployee
+                                  ? "bg-accent text-accent-foreground"
+                                  : "bg-default text-foreground"
+                              }`}
+                            >
+                              {m.message}
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  </ScrollShadow>
 
                   {/* Reply Box */}
-                  <form
+                  <Form
                     onSubmit={handleStaffSendChat}
-                    className="flex items-center gap-2 border-t border-separator p-4"
+                    className="flex flex-row items-center gap-2 border-t border-separator p-4"
                   >
-                    <input
+                    <TextField
+                      aria-label="Reply to client"
+                      className="flex-1"
                       value={staffReply}
-                      onChange={(e) => setStaffReply(e.target.value)}
-                      placeholder={
-                        selectedTicket.status === "queued"
-                          ? "Reply to claim and respond..."
-                          : "Write message to client..."
-                      }
-                      className="h-10 flex-1 rounded-lg border border-separator bg-background px-3.5 text-sm text-foreground outline-none focus:border-accent"
-                    />
-                    <Button type="submit" variant="primary" className="h-10">
-                      <Send className="h-4 w-4" />
+                      onChange={setStaffReply}
+                    >
+                      <Input
+                        variant="secondary"
+                        placeholder={
+                          selectedTicket.status === "queued"
+                            ? "Reply to claim and respond..."
+                            : "Write message to client..."
+                        }
+                      />
+                    </TextField>
+                    <Button type="submit" variant="primary">
+                      <PaperPlane className="size-4" />
                       Send
                     </Button>
-                  </form>
+                  </Form>
                 </Card>
               ) : (
-                <Card className="border border-separator bg-surface p-12 text-center text-sm text-muted">
-                  Select a ticket from the queue on the left.
+                <Card className="p-12">
+                  <EmptyState className="flex flex-col items-center justify-center gap-2 text-center">
+                    <Comments className="size-6 text-muted" />
+                    <span className="text-sm text-muted">
+                      Select a ticket from the queue on the left.
+                    </span>
+                  </EmptyState>
                 </Card>
               )}
             </div>

@@ -2,8 +2,26 @@
 
 import React, { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Button, Card } from "@heroui/react";
-import { AlertCircle } from "lucide-react";
+import {
+  Envelope,
+  Eye,
+  EyeSlash,
+  Lock,
+  ShieldCheck,
+} from "@gravity-ui/icons";
+import {
+  Alert,
+  Button,
+  Card,
+  Chip,
+  FieldError,
+  Form,
+  InputGroup,
+  Label,
+  Spinner,
+  TextField,
+  Typography,
+} from "@heroui/react";
 import { usePrintShop } from "@/context/PrintShopContext";
 import { sanitizeSafeNextPath } from "@/lib/security";
 
@@ -17,6 +35,7 @@ function StaffLoginContent() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(
     errorParam === "account_disabled"
       ? "Your staff account has been deactivated by an administrator."
@@ -28,7 +47,7 @@ function StaffLoginContent() {
     ? sanitizeSafeNextPath(rawNextPath, "")
     : "";
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
@@ -57,80 +76,117 @@ function StaffLoginContent() {
   };
 
   return (
-    <div className="mx-auto max-w-md px-4 py-16 space-y-6">
-      <div className="space-y-1.5">
-        <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted">
-          Internal Access
-        </p>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-          {settings.shopName} Staff Portal
-        </h1>
-        <p className="text-xs leading-relaxed text-muted">
-          Restricted to authorized operations personnel and system
-          administrators.
-        </p>
-      </div>
-
+    <div className="mx-auto max-w-md px-4 py-16 space-y-4">
       {safeNextPreview && (
-        <div className="flex items-center gap-2 rounded-lg border border-separator bg-surface-secondary px-3.5 py-2.5 text-xs text-muted">
-          <span>
-            Authenticate to continue to{" "}
-            <code className="font-mono font-medium text-foreground">
-              {safeNextPreview}
-            </code>
-            .
-          </span>
-        </div>
+        <Alert status="accent">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>Authentication Required</Alert.Title>
+            <Alert.Description>
+              Sign in with authorized staff credentials to continue to{" "}
+              <Typography.Code>{safeNextPreview}</Typography.Code>.
+            </Alert.Description>
+          </Alert.Content>
+        </Alert>
       )}
 
-      <Card className="border border-separator bg-surface p-6 space-y-5 shadow-surface">
-        {error && (
-          <div className="flex items-start gap-2 rounded-lg border border-danger/30 bg-danger/10 p-3 text-xs text-danger">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
+      <Card className="p-6">
+        <Card.Header>
+          <Chip size="sm" color="accent" variant="soft" className="mb-1 w-fit">
+            <ShieldCheck width={12} />
+            <Chip.Label>Internal Access</Chip.Label>
+          </Chip>
+          <Card.Title className="text-xl">
+            {settings.shopName} Staff Portal
+          </Card.Title>
+          <Card.Description>
+            Restricted to authorized operations personnel and system
+            administrators.
+          </Card.Description>
+        </Card.Header>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-foreground">
-              Work Email
-            </label>
-            <input
-              required
+        <Card.Content className="space-y-4 pt-4">
+          {error && (
+            <Alert status="danger">
+              <Alert.Indicator />
+              <Alert.Content>
+                <Alert.Title>Sign In Failed</Alert.Title>
+                <Alert.Description>{error}</Alert.Description>
+              </Alert.Content>
+            </Alert>
+          )}
+
+          <Form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <TextField
+              isRequired
+              name="email"
               type="email"
               autoComplete="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="staff@clayjar.com.ph"
-              className="h-10 w-full rounded-lg border border-separator bg-background px-3.5 text-sm text-foreground outline-none focus:border-accent"
-            />
-          </div>
+              onChange={setEmail}
+            >
+              <Label>Work Email</Label>
+              <InputGroup variant="secondary">
+                <InputGroup.Prefix>
+                  <Envelope className="size-4 text-muted" />
+                </InputGroup.Prefix>
+                <InputGroup.Input placeholder="admin@clayjar.com.ph" />
+              </InputGroup>
+              <FieldError />
+            </TextField>
 
-          <div>
-            <label className="mb-1 block text-xs font-medium text-foreground">
-              Password
-            </label>
-            <input
-              required
-              type="password"
+            <TextField
+              isRequired
+              name="password"
               autoComplete="current-password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="h-10 w-full rounded-lg border border-separator bg-background px-3.5 text-sm text-foreground outline-none focus:border-accent"
-            />
-          </div>
+              onChange={setPassword}
+            >
+              <Label>Password</Label>
+              <InputGroup variant="secondary">
+                <InputGroup.Prefix>
+                  <Lock className="size-4 text-muted" />
+                </InputGroup.Prefix>
+                <InputGroup.Input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                />
+                <InputGroup.Suffix className="pe-0">
+                  <Button
+                    isIconOnly
+                    size="sm"
+                    variant="ghost"
+                    aria-label={
+                      showPassword ? "Hide password" : "Show password"
+                    }
+                    onPress={() => setShowPassword((prev) => !prev)}
+                  >
+                    {showPassword ? (
+                      <Eye className="size-4" />
+                    ) : (
+                      <EyeSlash className="size-4" />
+                    )}
+                  </Button>
+                </InputGroup.Suffix>
+              </InputGroup>
+              <FieldError />
+            </TextField>
 
-          <Button
-            type="submit"
-            variant="primary"
-            fullWidth
-            isDisabled={loading}
-          >
-            {loading ? "Authenticating..." : "Sign In to Workspace"}
-          </Button>
-        </form>
+            <Button
+              type="submit"
+              variant="primary"
+              fullWidth
+              isPending={loading}
+            >
+              {({ isPending }) => (
+                <>
+                  {isPending && <Spinner color="current" size="sm" />}
+                  {isPending ? "Authenticating..." : "Sign In to Workspace"}
+                </>
+              )}
+            </Button>
+          </Form>
+        </Card.Content>
       </Card>
     </div>
   );
@@ -140,8 +196,9 @@ export default function StaffLoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="mx-auto max-w-md px-4 py-20 text-center text-sm text-muted">
-          Loading Staff Authentication...
+        <div className="mx-auto flex max-w-md items-center justify-center gap-3 px-4 py-20 text-sm text-muted">
+          <Spinner size="sm" />
+          <span>Loading Staff Authentication...</span>
         </div>
       }
     >

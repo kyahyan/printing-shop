@@ -1,13 +1,63 @@
 "use client";
 
 import React, { useState } from "react";
-import Link from "next/link";
+import NextLink from "next/link";
 import { useRouter } from "next/navigation";
-import { Button, Card, Chip } from "@heroui/react";
-import { ArrowRight, Search } from "lucide-react";
+import {
+  ArrowRight,
+  ChevronDown,
+  CircleFill,
+  Comments,
+  FileText,
+  Layers,
+  Magnifier,
+  Person,
+  Printer,
+  ShieldCheck,
+  ShoppingBag,
+  Tray,
+} from "@gravity-ui/icons";
+import {
+  Accordion,
+  Button,
+  Card,
+  Chip,
+  EmptyState,
+  Form,
+  Label,
+  Link,
+  SearchField,
+  Separator,
+  Surface,
+  Table,
+  Typography,
+} from "@heroui/react";
 import { usePrintShop } from "@/context/PrintShopContext";
 import type { Product } from "@/types/printshop";
 import { ProductPriceModal } from "@/components/ProductPriceModal";
+
+const PRINT_SPECS_FAQ = [
+  {
+    title: "How are per-size unit rates and bulk tiers calculated?",
+    content:
+      "Every catalog product maintains an itemized dimension matrix with Standard (1+), Bulk (100+), and Wholesale (500+) unit rates, combined with paper stock multipliers and per-unit lamination fees.",
+  },
+  {
+    title: "When should I request a formal quotation instead of ordering directly?",
+    content:
+      "Use Request Formal Quotation for custom die-cut dimensions, multi-SKU artwork splits, Pantone spot inks, specialty rigid packaging, or trade runs above 1,000 units.",
+  },
+  {
+    title: "What pre-press file specifications do you accept?",
+    content:
+      "Provide print-ready PDF/X-1a or packaged Adobe Illustrator files in CMYK color mode at 300 DPI minimum, with 3mm full bleed and outlined fonts via HTTPS link.",
+  },
+  {
+    title: "How do reference codes and live support queuing work?",
+    content:
+      "Every order (ORD-...), quotation (QT-...), and support ticket (TKT-...) receives a unique non-enumerable reference code so you can track production stages or consult an estimator without creating an account first.",
+  },
+];
 
 export default function HomePage() {
   const router = useRouter();
@@ -34,162 +84,175 @@ export default function HomePage() {
     ? tickets.filter((t) => t.status === "queued").length
     : queueSummary.queuedTickets;
 
-  const handleTrackSubmit = (e: React.FormEvent) => {
+  const handleTrackSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!refQuery.trim()) return;
     router.push(`/track?ref=${encodeURIComponent(refQuery.trim())}`);
   };
 
   return (
-    <div className="space-y-20">
-      {/* ARCHITECTURAL HERO */}
+    <div className="space-y-20 pb-8">
+      {/* HERO SECTION */}
       <section className="border-b border-separator bg-surface py-16 md:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          <div className="grid items-start gap-12 lg:grid-cols-12">
+          <div className="grid items-center gap-12 lg:grid-cols-12">
             <div className="space-y-7 lg:col-span-7">
-              <div className="space-y-3">
-                <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted">
-                  Commercial Print & Production Desk
-                </p>
-                <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-5xl sm:leading-[1.1]">
+              <div className="space-y-4">
+                <Chip color="accent" variant="soft" size="md">
+                  <CircleFill width={6} />
+                  <Chip.Label>Commercial Print & Production Desk</Chip.Label>
+                </Chip>
+
+                <Typography.Heading
+                  level={1}
+                  className="text-3xl font-bold tracking-tight sm:text-5xl sm:leading-[1.1]"
+                >
                   Precision commercial printing priced by exact specification.
-                </h1>
-                <p className="max-w-2xl text-base leading-relaxed text-muted">
+                </Typography.Heading>
+
+                <Typography.Paragraph color="muted" className="max-w-2xl text-base leading-relaxed">
                   {settings.tagline}. Inspect published per-size unit schedules,
                   volume breaks, and paper substrates, or submit custom project
                   specifications for a formal quotation.
-                </p>
+                </Typography.Paragraph>
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
-                <Link href="/products">
+                <NextLink href="/products">
                   <Button variant="primary" size="lg">
+                    <ShoppingBag className="size-4" />
                     Browse Catalog & Pricing
-                    <ArrowRight className="h-4 w-4" />
+                    <ArrowRight className="size-4" />
                   </Button>
-                </Link>
-                <Link href="/quotations">
+                </NextLink>
+                <NextLink href="/quotations">
                   <Button variant="secondary" size="lg">
+                    <FileText className="size-4" />
                     Request Formal Quotation
                   </Button>
-                </Link>
+                </NextLink>
               </div>
 
-              {/* Reference Lookup */}
-              <div className="max-w-xl pt-2">
-                <label
-                  htmlFor="hero-ref-input"
-                  className="mb-2 block text-xs font-medium text-muted"
-                >
-                  Track an existing order, quotation, or support ticket
-                </label>
-                <form
+              {/* HeroUI SearchField Reference Lookup */}
+              <Surface variant="secondary" className="max-w-xl rounded-3xl p-4">
+                <Form
                   onSubmit={handleTrackSubmit}
-                  className="flex flex-col gap-2 sm:flex-row"
+                  className="flex flex-col gap-3 sm:flex-row sm:items-end"
                 >
-                  <div className="relative flex-1">
-                    <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-                    <input
-                      id="hero-ref-input"
-                      value={refQuery}
-                      onChange={(e) => setRefQuery(e.target.value)}
-                      placeholder={`${settings.orderPrefix}-2026-..., ${settings.quotePrefix}-2026-..., or ${settings.ticketPrefix}-...`}
-                      className="h-10 w-full rounded-lg border border-separator bg-background pl-10 pr-3 font-mono text-sm text-foreground outline-none transition-colors placeholder:font-sans placeholder:text-muted focus:border-accent"
-                    />
-                  </div>
-                  <Button type="submit" variant="secondary" className="h-10">
-                    Look Up Reference
+                  <SearchField
+                    className="flex-1"
+                    name="ref"
+                    value={refQuery}
+                    onChange={setRefQuery}
+                  >
+                    <Label>Track an order, quotation, or support ticket</Label>
+                    <SearchField.Group>
+                      <SearchField.SearchIcon />
+                      <SearchField.Input
+                        placeholder={`${settings.orderPrefix}-..., ${settings.quotePrefix}-..., or ${settings.ticketPrefix}-...`}
+                        className="font-mono placeholder:font-sans"
+                      />
+                      <SearchField.ClearButton />
+                    </SearchField.Group>
+                  </SearchField>
+                  <Button type="submit" variant="primary">
+                    <Magnifier className="size-4" />
+                    Look Up
                   </Button>
-                </form>
-              </div>
+                </Form>
+              </Surface>
             </div>
 
-            {/* Studio Operations Ledger Card */}
+            {/* Studio Operations Card */}
             <div className="lg:col-span-5">
-              <Card className="border border-separator bg-background p-6 shadow-surface space-y-5">
-                <div className="flex items-start justify-between gap-4 border-b border-separator pb-4">
+              <Card variant="secondary" className="p-6">
+                <Card.Header className="flex-row items-start justify-between gap-4">
                   <div>
-                    <p className="text-xs font-medium text-muted">
+                    <Card.Description>
                       Production & Estimating Status
-                    </p>
-                    <h2 className="mt-0.5 text-base font-semibold text-foreground">
+                    </Card.Description>
+                    <Card.Title className="mt-1 text-lg">
                       {settings.shopName}
-                    </h2>
+                    </Card.Title>
                   </div>
                   <Chip size="sm" color="success" variant="soft">
-                    Operational
+                    <CircleFill width={6} />
+                    <Chip.Label>Operational</Chip.Label>
                   </Chip>
-                </div>
+                </Card.Header>
 
-                <div className="grid grid-cols-3 divide-x divide-separator rounded-lg border border-separator bg-surface">
-                  <div className="p-3.5">
-                    <div className="text-[11px] text-muted">Catalog Lines</div>
-                    <div className="mt-1 text-xl font-semibold text-foreground tabular-nums">
-                      {activeProducts.length}
-                    </div>
-                    <div className="mt-0.5 text-[11px] text-muted tabular-nums">
-                      {totalSizeTiers} size specs
-                    </div>
+                <Card.Content className="space-y-5 pt-2">
+                  <div className="grid grid-cols-3 gap-2.5">
+                    <Surface className="rounded-2xl p-3.5">
+                      <div className="text-xs text-muted">Catalog Lines</div>
+                      <div className="mt-1 text-2xl font-bold text-foreground tabular-nums">
+                        {activeProducts.length}
+                      </div>
+                      <div className="mt-0.5 text-[11px] text-muted tabular-nums">
+                        {totalSizeTiers} size specs
+                      </div>
+                    </Surface>
+                    <Surface className="rounded-2xl p-3.5">
+                      <div className="text-xs text-muted">Specialists</div>
+                      <div className="mt-1 text-2xl font-bold text-foreground tabular-nums">
+                        {queueSummary.onlineSpecialists}
+                      </div>
+                      <div className="mt-0.5 text-[11px] text-muted">
+                        On duty
+                      </div>
+                    </Surface>
+                    <Surface className="rounded-2xl p-3.5">
+                      <div className="text-xs text-muted">Queue</div>
+                      <div className="mt-1 text-2xl font-bold text-foreground tabular-nums">
+                        {queuedTickets}
+                      </div>
+                      <div className="mt-0.5 text-[11px] text-muted">
+                        Waiting
+                      </div>
+                    </Surface>
                   </div>
-                  <div className="p-3.5">
-                    <div className="text-[11px] text-muted">Specialists</div>
-                    <div className="mt-1 text-xl font-semibold text-foreground tabular-nums">
-                      {queueSummary.onlineSpecialists}
-                    </div>
-                    <div className="mt-0.5 text-[11px] text-muted">
-                      On duty
-                    </div>
-                  </div>
-                  <div className="p-3.5">
-                    <div className="text-[11px] text-muted">Support Queue</div>
-                    <div className="mt-1 text-xl font-semibold text-foreground tabular-nums">
-                      {queuedTickets}
-                    </div>
-                    <div className="mt-0.5 text-[11px] text-muted">
-                      Waiting
-                    </div>
-                  </div>
-                </div>
 
-                <dl className="space-y-2.5 text-xs">
-                  <div className="flex items-baseline justify-between gap-4 border-b border-separator/70 pb-2">
-                    <dt className="text-muted">Volume Tiers</dt>
-                    <dd className="font-medium text-foreground">
-                      Standard · 100+ Bulk · 500+ Wholesale
-                    </dd>
-                  </div>
-                  <div className="flex items-baseline justify-between gap-4 border-b border-separator/70 pb-2">
-                    <dt className="text-muted">Quotation Validity</dt>
-                    <dd className="font-medium text-foreground tabular-nums">
-                      {settings.quotationValidityDays} calendar days
-                    </dd>
-                  </div>
-                  <div className="flex items-baseline justify-between gap-4 border-b border-separator/70 pb-2">
-                    <dt className="text-muted">Settlement & Tax</dt>
-                    <dd className="font-medium text-foreground tabular-nums">
-                      {settings.currencyCode} ({settings.currencySymbol}) ·{" "}
-                      {settings.taxRate}% VAT
-                    </dd>
-                  </div>
-                  <div className="flex items-baseline justify-between gap-4">
-                    <dt className="text-muted">Operating Hours</dt>
-                    <dd className="font-medium text-foreground">
-                      {settings.businessHours}
-                    </dd>
-                  </div>
-                </dl>
+                  <Surface className="rounded-2xl p-4 space-y-2.5 text-xs">
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-muted">Volume Tiers</span>
+                      <span className="font-medium text-foreground">
+                        Standard · 100+ Bulk · 500+ Wholesale
+                      </span>
+                    </div>
+                    <Separator />
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-muted">Quotation Validity</span>
+                      <span className="font-medium text-foreground tabular-nums">
+                        {settings.quotationValidityDays} calendar days
+                      </span>
+                    </div>
+                    <Separator />
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-muted">Settlement & Tax</span>
+                      <span className="font-medium text-foreground tabular-nums">
+                        {settings.currencyCode} ({settings.currencySymbol}) ·{" "}
+                        {settings.taxRate}% VAT
+                      </span>
+                    </div>
+                    <Separator />
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-muted">Operating Hours</span>
+                      <span className="font-medium text-foreground">
+                        {settings.businessHours}
+                      </span>
+                    </div>
+                  </Surface>
+                </Card.Content>
 
-                <div className="flex items-center justify-between border-t border-separator pt-3 text-xs">
+                <Card.Footer className="justify-between pt-2 text-xs">
                   <span className="text-muted">
                     Need pre-press or substrate guidance?
                   </span>
-                  <Link
-                    href="/chat"
-                    className="font-medium text-accent hover:underline"
-                  >
-                    Open Support Desk →
+                  <Link href="/chat" className="font-medium text-xs">
+                    Open Support Desk
+                    <Link.Icon />
                   </Link>
-                </div>
+                </Card.Footer>
               </Card>
             </div>
           </div>
@@ -198,58 +261,64 @@ export default function HomePage() {
 
       {/* CATALOG SPECIFICATION DIRECTORY */}
       <section className="mx-auto max-w-7xl px-4 sm:px-6 space-y-8">
-        <div className="flex flex-wrap items-end justify-between gap-4 border-b border-separator pb-5">
+        <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-semibold tracking-tight text-foreground">
+            <Typography.Heading level={2} className="text-2xl font-bold tracking-tight">
               Print Catalog & Size Schedules
-            </h2>
-            <p className="mt-1 text-sm text-muted">
+            </Typography.Heading>
+            <Typography.Paragraph color="muted" size="sm" className="mt-1">
               Select any product line to inspect full dimension matrices, bulk
               unit pricing, paper stocks, and finishing options.
-            </p>
+            </Typography.Paragraph>
           </div>
           {activeProducts.length > 0 && (
-            <Link href="/products">
+            <NextLink href="/products">
               <Button variant="secondary" size="sm">
                 View Full Directory ({activeProducts.length})
-                <ArrowRight className="h-4 w-4" />
+                <ArrowRight className="size-3.5" />
               </Button>
-            </Link>
+            </NextLink>
           )}
         </div>
 
         {activeProducts.length === 0 ? (
-          <Card className="border border-separator bg-surface p-10">
-            <div className="flex flex-col items-start justify-between gap-6 md:flex-row md:items-center">
-              <div className="space-y-1.5">
+          <Card className="p-10">
+            <EmptyState className="flex flex-col items-center justify-center gap-4 text-center">
+              <div className="flex size-12 items-center justify-center rounded-2xl bg-default text-muted">
+                <Tray className="size-6" />
+              </div>
+              <div className="space-y-1">
                 <h3 className="text-base font-semibold text-foreground">
                   No standard catalog schedules published yet
                 </h3>
-                <p className="max-w-xl text-sm text-muted">
+                <p className="max-w-lg text-sm text-muted">
                   Administrators can configure standard print lines and per-size
                   rate tables in the Administration workspace. Clients may
                   submit custom specifications directly through the Quotation
                   Desk.
                 </p>
               </div>
-              <div className="flex shrink-0 flex-wrap gap-2.5">
-                <Link href="/quotations">
-                  <Button variant="primary">Request Custom Quotation</Button>
-                </Link>
+              <div className="flex flex-wrap justify-center gap-2.5 pt-1">
+                <NextLink href="/quotations">
+                  <Button variant="primary">
+                    <FileText className="size-4" />
+                    Request Custom Quotation
+                  </Button>
+                </NextLink>
                 {currentUser?.role === "super_admin" ? (
-                  <Link href="/admin">
+                  <NextLink href="/admin">
                     <Button variant="secondary">Manage Catalog</Button>
-                  </Link>
+                  </NextLink>
                 ) : (
-                  <Link href="/staff/login">
+                  <NextLink href="/staff/login">
                     <Button variant="secondary">Staff Portal</Button>
-                  </Link>
+                  </NextLink>
                 )}
               </div>
-            </div>
+            </EmptyState>
           </Card>
         ) : (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {activeProducts.map((product) => {
               const lowestSize = [...product.sizes].sort(
                 (a, b) => a.unitPrice - b.unitPrice
@@ -257,85 +326,90 @@ export default function HomePage() {
               return (
                 <Card
                   key={product.id}
-                  onClick={() => setSelectedProduct(product)}
-                  className="group cursor-pointer border border-separator bg-surface p-0 transition-colors hover:border-foreground/30 flex flex-col justify-between overflow-hidden"
+                  className="flex flex-col justify-between"
                 >
                   <div>
-                    <div className="border-b border-separator p-5">
-                      <div className="flex items-center justify-between gap-2 text-xs text-muted">
-                        <span className="font-medium text-foreground/80">
-                          {product.category}
+                    <Card.Header className="gap-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <Chip size="sm" variant="soft" color="accent">
+                          <Chip.Label>{product.category}</Chip.Label>
+                        </Chip>
+                        <span className="text-xs text-muted">
+                          Lead: {product.leadTimeDays}
                         </span>
-                        <span>Lead time: {product.leadTimeDays}</span>
                       </div>
-                      <div className="mt-2.5 flex items-start justify-between gap-2">
-                        <h3 className="text-base font-semibold text-foreground group-hover:text-accent transition-colors">
+                      <div className="flex items-start justify-between gap-2 pt-1">
+                        <Card.Title className="text-base">
                           {product.name}
-                        </h3>
+                        </Card.Title>
                         {product.badge && (
-                          <span className="shrink-0 rounded bg-surface-secondary px-2 py-0.5 text-[11px] font-medium text-muted">
-                            {product.badge}
-                          </span>
+                          <Chip size="sm" variant="soft" color="warning">
+                            <Chip.Label>{product.badge}</Chip.Label>
+                          </Chip>
                         )}
                       </div>
-                      <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-muted">
+                      <Card.Description className="line-clamp-2">
                         {product.shortDescription}
-                      </p>
-                    </div>
+                      </Card.Description>
+                    </Card.Header>
 
-                    <div className="p-5">
-                      <div className="mb-2 flex items-center justify-between text-[11px] font-medium text-muted">
-                        <span>Size ({product.sizes.length})</span>
-                        <span>Rate ({product.baseUnit})</span>
-                      </div>
-                      <div className="divide-y divide-separator rounded-md border border-separator">
-                        {product.sizes.slice(0, 3).map((sz) => (
-                          <div
-                            key={sz.id}
-                            className="flex items-center justify-between px-3 py-2 text-xs"
+                    <Card.Content className="pt-2">
+                      <Table variant="secondary">
+                        <Table.ScrollContainer>
+                          <Table.Content
+                            aria-label={`${product.name} sizes`}
                           >
-                            <div className="min-w-0 pr-2">
-                              <span className="font-medium text-foreground">
-                                {sz.sizeLabel}
-                              </span>
-                              <span className="ml-1.5 font-mono text-[11px] text-muted">
-                                {sz.dimensions}
-                              </span>
-                            </div>
-                            <span className="shrink-0 font-mono font-medium text-foreground tabular-nums">
-                              {formatCurrency(sz.unitPrice)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
+                            <Table.Header>
+                              <Table.Column isRowHeader>Size</Table.Column>
+                              <Table.Column>Rate</Table.Column>
+                            </Table.Header>
+                            <Table.Body>
+                              {product.sizes.slice(0, 3).map((sz) => (
+                                <Table.Row key={sz.id} id={sz.id}>
+                                  <Table.Cell>
+                                    <span className="font-medium text-foreground">
+                                      {sz.sizeLabel}
+                                    </span>
+                                    <span className="ml-1.5 font-mono text-[11px] text-muted">
+                                      {sz.dimensions}
+                                    </span>
+                                  </Table.Cell>
+                                  <Table.Cell className="font-mono font-medium text-foreground tabular-nums">
+                                    {formatCurrency(sz.unitPrice)}
+                                  </Table.Cell>
+                                </Table.Row>
+                              ))}
+                            </Table.Body>
+                          </Table.Content>
+                        </Table.ScrollContainer>
+                      </Table>
                       {product.sizes.length > 3 && (
-                        <p className="mt-2 text-[11px] text-muted">
-                          +{product.sizes.length - 3} additional size options &
-                          volume tiers
+                        <p className="mt-2 text-xs text-muted">
+                          +{product.sizes.length - 3} more size tiers available
                         </p>
                       )}
-                    </div>
+                    </Card.Content>
                   </div>
 
-                  <div className="flex items-center justify-between border-t border-separator bg-surface-secondary/40 px-5 py-3.5">
+                  <Card.Footer className="items-center justify-between border-t border-separator pt-4">
                     <div className="tabular-nums">
-                      <span className="text-[11px] text-muted">From </span>
+                      <span className="text-xs text-muted">From </span>
                       <span className="font-mono text-sm font-semibold text-foreground">
                         {lowestSize ? formatCurrency(lowestSize.unitPrice) : "—"}
                       </span>
-                      <span className="text-[11px] text-muted">
+                      <span className="text-xs text-muted">
                         {" "}
                         {product.baseUnit}
                       </span>
                     </div>
                     <Button
                       size="sm"
-                      variant="secondary"
+                      variant="primary"
                       onPress={() => setSelectedProduct(product)}
                     >
                       Configure & Price
                     </Button>
-                  </div>
+                  </Card.Footer>
                 </Card>
               );
             })}
@@ -343,107 +417,151 @@ export default function HomePage() {
         )}
       </section>
 
-      {/* PRODUCTION PROCESS */}
-      <section className="mx-auto max-w-7xl px-4 sm:px-6">
-        <div className="overflow-hidden rounded-xl border border-separator bg-surface">
-          <div className="border-b border-separator px-6 py-4">
-            <h2 className="text-sm font-semibold text-foreground">
-              Standard Production & Estimating Workflow
-            </h2>
-          </div>
-          <div className="grid divide-y divide-separator md:grid-cols-4 md:divide-x md:divide-y-0">
-            <div className="p-6 space-y-2">
-              <div className="font-mono text-xs font-medium text-muted">01</div>
-              <h3 className="text-sm font-semibold text-foreground">
-                Specification & Sizing
-              </h3>
-              <p className="text-xs leading-relaxed text-muted">
+      {/* PRODUCTION WORKFLOW */}
+      <section className="mx-auto max-w-7xl px-4 sm:px-6 space-y-6">
+        <div>
+          <Typography.Heading level={2} className="text-2xl font-bold tracking-tight">
+            Production & Estimating Workflow
+          </Typography.Heading>
+          <Typography.Paragraph color="muted" size="sm" className="mt-1">
+            Structured commercial print intake from initial specification to dispatch.
+          </Typography.Paragraph>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <Card.Header>
+              <div className="mb-2 flex size-9 items-center justify-center rounded-xl bg-accent-soft text-accent-soft-foreground">
+                <Layers className="size-4" />
+              </div>
+              <Card.Title>01. Specification & Sizing</Card.Title>
+              <Card.Description>
                 Select standard dimensions, paper GSM substrates, and lamination
                 schedules, or define custom trim dimensions.
-              </p>
-            </div>
-            <div className="p-6 space-y-2">
-              <div className="font-mono text-xs font-medium text-muted">02</div>
-              <h3 className="text-sm font-semibold text-foreground">
-                Direct Order or Formal Quote
-              </h3>
-              <p className="text-xs leading-relaxed text-muted">
+              </Card.Description>
+            </Card.Header>
+          </Card>
+
+          <Card>
+            <Card.Header>
+              <div className="mb-2 flex size-9 items-center justify-center rounded-xl bg-accent-soft text-accent-soft-foreground">
+                <FileText className="size-4" />
+              </div>
+              <Card.Title>02. Order or Formal Quote</Card.Title>
+              <Card.Description>
                 Place standard runs directly with server-verified pricing or
-                request an estimator-reviewed quotation (
-                <code className="font-mono text-foreground">QT-...</code>).
-              </p>
-            </div>
-            <div className="p-6 space-y-2">
-              <div className="font-mono text-xs font-medium text-muted">03</div>
-              <h3 className="text-sm font-semibold text-foreground">
-                Pre-Press & Support Queue
-              </h3>
-              <p className="text-xs leading-relaxed text-muted">
+                request an estimator-reviewed quotation.
+              </Card.Description>
+            </Card.Header>
+          </Card>
+
+          <Card>
+            <Card.Header>
+              <div className="mb-2 flex size-9 items-center justify-center rounded-xl bg-accent-soft text-accent-soft-foreground">
+                <Comments className="size-4" />
+              </div>
+              <Card.Title>03. Support Ticket Queue</Card.Title>
+              <Card.Description>
                 Consult directly with a pre-press specialist in our live ticket
-                queue to verify bleed tolerances, dielines, and schedules.
-              </p>
-            </div>
-            <div className="p-6 space-y-2">
-              <div className="font-mono text-xs font-medium text-muted">04</div>
-              <h3 className="text-sm font-semibold text-foreground">
-                Tracked Production
-              </h3>
-              <p className="text-xs leading-relaxed text-muted">
-                Monitor job progress across Pre-Press, Printing, Finishing,
-                Quality Control, and Dispatch using your Reference Number.
-              </p>
-            </div>
-          </div>
+                queue to verify bleed tolerances and dielines.
+              </Card.Description>
+            </Card.Header>
+          </Card>
+
+          <Card>
+            <Card.Header>
+              <div className="mb-2 flex size-9 items-center justify-center rounded-xl bg-accent-soft text-accent-soft-foreground">
+                <Printer className="size-4" />
+              </div>
+              <Card.Title>04. Tracked Production</Card.Title>
+              <Card.Description>
+                Monitor job progress across Pre-Press, Printing, Finishing, and
+                Dispatch using your unique Reference Code.
+              </Card.Description>
+            </Card.Header>
+          </Card>
         </div>
       </section>
 
-      {/* PORTAL ACCESS */}
+      {/* SPECIFICATIONS ACCORDION & PORTAL ACCESS */}
       <section className="mx-auto max-w-7xl px-4 sm:px-6">
-        <div className="grid gap-6 md:grid-cols-2">
-          <Card className="border border-separator bg-surface p-6 flex flex-col justify-between gap-5">
-            <div className="space-y-2">
-              <p className="text-xs font-medium uppercase tracking-wider text-muted">
-                Client Accounts
-              </p>
-              <h3 className="text-lg font-semibold text-foreground">
-                Centralize Repeat Print Runs & Quotations
-              </h3>
-              <p className="text-sm leading-relaxed text-muted">
-                Register a client account to maintain an archive of your
-                quotations, convert approved estimates into production orders,
-                and access active support tickets.
-              </p>
-            </div>
+        <div className="grid gap-8 lg:grid-cols-12">
+          <div className="space-y-4 lg:col-span-7">
             <div>
-              <Link href="/account">
-                <Button variant="primary">
-                  Access Client Portal
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </Link>
+              <Typography.Heading level={2} className="text-xl font-bold tracking-tight">
+                Pre-Press & Ordering Specifications
+              </Typography.Heading>
+              <Typography.Paragraph color="muted" size="sm" className="mt-1">
+                Technical standards for files, quotations, and volume tiers.
+              </Typography.Paragraph>
             </div>
-          </Card>
 
-          <Card className="border border-separator bg-surface p-6 flex flex-col justify-between gap-5">
-            <div className="space-y-2">
-              <p className="text-xs font-medium uppercase tracking-wider text-muted">
-                Internal Operations
-              </p>
-              <h3 className="text-lg font-semibold text-foreground">
-                Operations Desk & System Administration
-              </h3>
-              <p className="text-sm leading-relaxed text-muted">
-                Authorized staff issue quotations, log walk-in counter orders,
-                update press stages, and service queued tickets. Super Admins
-                manage catalog pricing and personnel access.
-              </p>
-            </div>
-            <div>
-              <Link href="/staff/login">
-                <Button variant="secondary">Sign In to Staff Portal</Button>
-              </Link>
-            </div>
-          </Card>
+            <Accordion variant="surface" className="w-full">
+              {PRINT_SPECS_FAQ.map((item, idx) => (
+                <Accordion.Item key={idx}>
+                  <Accordion.Heading>
+                    <Accordion.Trigger>
+                      {item.title}
+                      <Accordion.Indicator>
+                        <ChevronDown />
+                      </Accordion.Indicator>
+                    </Accordion.Trigger>
+                  </Accordion.Heading>
+                  <Accordion.Panel>
+                    <Accordion.Body>{item.content}</Accordion.Body>
+                  </Accordion.Panel>
+                </Accordion.Item>
+              ))}
+            </Accordion>
+          </div>
+
+          <div className="flex flex-col gap-5 lg:col-span-5">
+            <Card className="flex-1 justify-between">
+              <Card.Header>
+                <Chip size="sm" variant="soft" color="accent" className="mb-1 w-fit">
+                  <Person width={12} />
+                  <Chip.Label>Client Accounts</Chip.Label>
+                </Chip>
+                <Card.Title>Centralize Repeat Runs & Quotations</Card.Title>
+                <Card.Description>
+                  Register a client account to maintain an archive of your
+                  quotations, convert approved estimates into production orders,
+                  and manage support tickets.
+                </Card.Description>
+              </Card.Header>
+              <Card.Footer>
+                <NextLink href="/account">
+                  <Button variant="primary">
+                    Access Client Portal
+                    <ArrowRight className="size-4" />
+                  </Button>
+                </NextLink>
+              </Card.Footer>
+            </Card>
+
+            <Card className="flex-1 justify-between">
+              <Card.Header>
+                <Chip size="sm" variant="soft" color="default" className="mb-1 w-fit">
+                  <ShieldCheck width={12} />
+                  <Chip.Label>Internal Operations</Chip.Label>
+                </Chip>
+                <Card.Title>Operations Desk & Administration</Card.Title>
+                <Card.Description>
+                  Authorized staff issue quotations, log walk-in counter orders,
+                  update press stages, and service queued tickets. Super Admins
+                  configure catalog pricing and personnel.
+                </Card.Description>
+              </Card.Header>
+              <Card.Footer>
+                <NextLink href="/staff/login">
+                  <Button variant="secondary">
+                    <ShieldCheck className="size-4" />
+                    Sign In to Staff Portal
+                  </Button>
+                </NextLink>
+              </Card.Footer>
+            </Card>
+          </div>
         </div>
       </section>
 

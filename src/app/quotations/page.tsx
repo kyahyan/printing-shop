@@ -1,9 +1,42 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { Button, Card, Chip } from "@heroui/react";
-import { AlertCircle, CheckCircle2, Copy } from "lucide-react";
+import NextLink from "next/link";
+import {
+  Check,
+  CircleCheck,
+  Comments,
+  Copy,
+  FileText,
+  Link as LinkIcon,
+  Magnifier,
+  Plus,
+} from "@gravity-ui/icons";
+import {
+  Alert,
+  Breadcrumbs,
+  Button,
+  Card,
+  Chip,
+  Description,
+  FieldError,
+  Fieldset,
+  Form,
+  Input,
+  InputGroup,
+  Label,
+  ListBox,
+  NumberField,
+  Select,
+  Separator,
+  Spinner,
+  Surface,
+  Tabs,
+  TextArea,
+  TextField,
+  Typography,
+  toast,
+} from "@heroui/react";
 import { usePrintShop } from "@/context/PrintShopContext";
 import type { InquiryQuotation } from "@/types/printshop";
 import { sanitizeExternalUrl } from "@/lib/security";
@@ -104,7 +137,7 @@ export default function QuotationsPage() {
     selectedSizeId,
   ]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (submitting) return;
     setError(null);
@@ -150,6 +183,7 @@ export default function QuotationsPage() {
       });
 
       setSubmittedQuote(created);
+      toast.success(`Quotation ${created.referenceNumber} submitted`);
     } catch (err) {
       setError(
         err instanceof Error
@@ -164,93 +198,117 @@ export default function QuotationsPage() {
   const handleCopy = (ref: string) => {
     navigator.clipboard.writeText(ref);
     setCopied(true);
+    toast.success("Reference copied to clipboard");
     setTimeout(() => setCopied(false), 2000);
   };
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 space-y-8">
-      <div className="border-b border-separator pb-6">
-        <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted">
-          Estimating Desk
-        </p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+      <Breadcrumbs>
+        <Breadcrumbs.Item href="/">Home</Breadcrumbs.Item>
+        <Breadcrumbs.Item>Request Quotation</Breadcrumbs.Item>
+      </Breadcrumbs>
+
+      <div>
+        <Typography.Heading
+          level={1}
+          className="text-2xl font-bold tracking-tight sm:text-3xl"
+        >
           Request Formal Quotation
-        </h1>
-        <p className="mt-1.5 max-w-2xl text-sm text-muted">
+        </Typography.Heading>
+        <Typography.Paragraph color="muted" size="sm" className="mt-1.5 max-w-2xl">
           Submit specifications for corporate runs, non-standard dimensions,
           multi-SKU splits, or structural packaging. Every request is assigned a
           unique{" "}
-          <code className="font-mono text-xs text-foreground">
+          <Typography.Code>
             {settings.quotePrefix}-YYYY-XXXXXXXX
-          </code>{" "}
+          </Typography.Code>{" "}
           reference valid for {settings.quotationValidityDays} days once quoted.
-        </p>
+        </Typography.Paragraph>
       </div>
 
       {submittedQuote ? (
-        <Card className="mx-auto max-w-2xl border border-separator bg-surface p-8 space-y-6">
-          <div className="flex items-start gap-3">
-            <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-            <div className="space-y-1">
-              <h2 className="text-lg font-semibold text-foreground">
+        <Card className="mx-auto max-w-2xl p-6">
+          <Card.Header>
+            <div className="flex items-center gap-2.5">
+              <CircleCheck className="size-5 text-success" />
+              <Card.Title className="text-lg">
                 Quotation Inquiry Registered
-              </h2>
-              <p className="text-sm text-muted">
-                Specifications for{" "}
-                <span className="font-medium text-foreground">
-                  {submittedQuote.subject}
-                </span>{" "}
-                have been routed to our estimating desk.
-              </p>
+              </Card.Title>
             </div>
-          </div>
+            <Card.Description>
+              Specifications for{" "}
+              <span className="font-medium text-foreground">
+                {submittedQuote.subject}
+              </span>{" "}
+              have been routed to our estimating desk.
+            </Card.Description>
+          </Card.Header>
 
-          <div className="flex items-center justify-between rounded-lg border border-separator bg-surface-secondary px-5 py-4">
-            <div>
-              <div className="text-[11px] font-medium uppercase tracking-wider text-muted">
-                Quotation Reference
-              </div>
-              <div className="mt-0.5 font-mono text-xl font-semibold text-foreground">
-                {submittedQuote.referenceNumber}
-              </div>
-            </div>
-            <Button
-              size="sm"
+          <Card.Content className="space-y-4">
+            <Surface
               variant="secondary"
-              onPress={() => handleCopy(submittedQuote.referenceNumber)}
+              className="flex items-center justify-between rounded-2xl p-4"
             >
-              <Copy className="h-3.5 w-3.5" />
-              {copied ? "Copied" : "Copy"}
-            </Button>
-          </div>
+              <div>
+                <div className="text-xs font-medium text-muted">
+                  Quotation Reference
+                </div>
+                <div className="mt-0.5 font-mono text-xl font-semibold text-foreground">
+                  {submittedQuote.referenceNumber}
+                </div>
+              </div>
+              <Button
+                size="sm"
+                variant="secondary"
+                onPress={() => handleCopy(submittedQuote.referenceNumber)}
+              >
+                {copied ? (
+                  <Check className="size-3.5" />
+                ) : (
+                  <Copy className="size-3.5" />
+                )}
+                {copied ? "Copied" : "Copy"}
+              </Button>
+            </Surface>
 
-          <dl className="grid gap-2 rounded-lg border border-separator bg-background p-4 text-xs sm:grid-cols-2">
-            <div>
-              <dt className="text-muted">Product / Line</dt>
-              <dd className="mt-0.5 font-medium text-foreground">
-                {submittedQuote.productName} ({submittedQuote.selectedSize})
-              </dd>
-            </div>
-            <div>
-              <dt className="text-muted">Quantity & Substrate</dt>
-              <dd className="mt-0.5 font-medium text-foreground tabular-nums">
-                {submittedQuote.quantity.toLocaleString()} ·{" "}
-                {submittedQuote.material}
-              </dd>
-            </div>
-          </dl>
+            <Surface
+              variant="secondary"
+              className="grid gap-3 rounded-2xl p-4 text-xs sm:grid-cols-2"
+            >
+              <div>
+                <div className="text-muted">Product / Line</div>
+                <div className="mt-0.5 font-medium text-foreground">
+                  {submittedQuote.productName} ({submittedQuote.selectedSize})
+                </div>
+              </div>
+              <div>
+                <div className="text-muted">Quantity & Substrate</div>
+                <div className="mt-0.5 font-medium text-foreground tabular-nums">
+                  {submittedQuote.quantity.toLocaleString()} ·{" "}
+                  {submittedQuote.material}
+                </div>
+              </div>
+            </Surface>
+          </Card.Content>
 
-          <div className="flex flex-wrap items-center gap-2.5 border-t border-separator pt-4">
-            <Link
+          <Card.Footer className="flex-wrap gap-2.5 border-t border-separator pt-4">
+            <NextLink
               href={`/track?ref=${encodeURIComponent(submittedQuote.referenceNumber)}`}
             >
-              <Button variant="primary">Track Quotation Status</Button>
-            </Link>
-            <Link
+              <Button variant="primary">
+                <Magnifier className="size-4" />
+                Track Quotation Status
+              </Button>
+            </NextLink>
+            <NextLink
               href={`/chat?ref=${encodeURIComponent(submittedQuote.referenceNumber)}`}
             >
-              <Button variant="secondary">Open Support Ticket</Button>
-            </Link>
+              <Button variant="secondary">
+                <Comments className="size-4" />
+                Open Support Ticket
+              </Button>
+            </NextLink>
             <Button
               variant="ghost"
               onPress={() => {
@@ -259,375 +317,456 @@ export default function QuotationsPage() {
                 setNotes("");
               }}
             >
+              <Plus className="size-4" />
               Submit Another Request
             </Button>
-          </div>
+          </Card.Footer>
         </Card>
       ) : (
         <div className="grid gap-8 lg:grid-cols-12">
-          {/* RFQ Form */}
-          <Card className="border border-separator bg-surface p-6 lg:col-span-8">
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {error && (
-                <div className="flex items-center gap-2 rounded-lg border border-danger/30 bg-danger/10 px-3.5 py-2.5 text-xs text-danger">
-                  <AlertCircle className="h-4 w-4 shrink-0" />
-                  <span>{error}</span>
-                </div>
-              )}
+          {/* RFQ Form Card */}
+          <Card className="p-6 lg:col-span-8">
+            <Card.Header className="pb-4">
+              <Card.Title>Project Specifications</Card.Title>
+              <Card.Description>
+                Choose a published catalog line as a baseline or specify a fully
+                bespoke print project.
+              </Card.Description>
+            </Card.Header>
 
-              {/* Specification Basis */}
-              <div className="grid grid-cols-2 gap-1.5 rounded-lg border border-separator bg-surface-secondary p-1">
-                <button
-                  type="button"
-                  disabled={activeProducts.length === 0}
-                  onClick={() => setJobMode("catalog")}
-                  className={`rounded-md px-3 py-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${
-                    jobMode === "catalog"
-                      ? "bg-surface text-foreground shadow-2xs"
-                      : "text-muted hover:text-foreground"
-                  }`}
+            <Card.Content>
+              <Form onSubmit={handleSubmit} className="flex flex-col gap-6">
+                {error && (
+                  <Alert status="danger">
+                    <Alert.Indicator />
+                    <Alert.Content>
+                      <Alert.Title>Validation Error</Alert.Title>
+                      <Alert.Description>{error}</Alert.Description>
+                    </Alert.Content>
+                  </Alert>
+                )}
+
+                {/* HeroUI Tabs for Specification Basis */}
+                <Tabs
+                  selectedKey={jobMode}
+                  onSelectionChange={(key) =>
+                    setJobMode(key as "catalog" | "custom")
+                  }
                 >
-                  Catalog Line Basis{" "}
-                  {activeProducts.length === 0 ? "(Empty)" : ""}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setJobMode("custom")}
-                  className={`rounded-md px-3 py-2 text-xs font-medium transition-colors ${
-                    jobMode === "custom"
-                      ? "bg-surface text-foreground shadow-2xs"
-                      : "text-muted hover:text-foreground"
-                  }`}
-                >
-                  Custom / Bespoke Project
-                </button>
-              </div>
+                  <Tabs.ListContainer>
+                    <Tabs.List aria-label="Specification Basis">
+                      <Tabs.Tab
+                        id="catalog"
+                        isDisabled={activeProducts.length === 0}
+                      >
+                        Catalog Line Basis{" "}
+                        {activeProducts.length === 0 ? "(Empty)" : ""}
+                        <Tabs.Indicator />
+                      </Tabs.Tab>
+                      <Tabs.Tab id="custom">
+                        Custom / Bespoke Project
+                        <Tabs.Indicator />
+                      </Tabs.Tab>
+                    </Tabs.List>
+                  </Tabs.ListContainer>
+                </Tabs>
 
-              {/* Project Subject */}
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-foreground">
-                  Project Reference Title *
-                </label>
-                <input
-                  required
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  placeholder="e.g., 1,000 Die-Cut Matte Pouch Labels (4 SKU Variants)"
-                  className="h-10 w-full rounded-lg border border-separator bg-background px-3.5 text-sm text-foreground outline-none focus:border-accent"
-                />
-              </div>
-
-              {jobMode === "catalog" ? (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-foreground">
-                      Catalog Product
-                    </label>
-                    <select
-                      value={selectedProductId}
-                      onChange={(e) => setSelectedProductId(e.target.value)}
-                      className="h-10 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
+                <Fieldset className="w-full">
+                  <Fieldset.Legend>Print Run Details</Fieldset.Legend>
+                  <Fieldset.Group>
+                    <TextField
+                      isRequired
+                      name="subject"
+                      value={subject}
+                      onChange={setSubject}
                     >
-                      {activeProducts.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                      <Label>Project Reference Title</Label>
+                      <Input
+                        variant="secondary"
+                        placeholder="e.g., 1,000 Die-Cut Matte Pouch Labels (4 SKU Variants)"
+                      />
+                      <FieldError />
+                    </TextField>
 
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-foreground">
-                      Base Size Schedule
-                    </label>
-                    <select
-                      value={selectedSizeId}
-                      onChange={(e) => setSelectedSizeId(e.target.value)}
-                      className="h-10 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
-                    >
-                      {selectedProduct?.sizes.map((sz) => (
-                        <option key={sz.id} value={sz.id}>
-                          {sz.sizeLabel} — {formatCurrency(sz.unitPrice)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                    {jobMode === "catalog" ? (
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <Select
+                          variant="secondary"
+                          value={selectedProductId}
+                          onChange={(key) =>
+                            key && setSelectedProductId(String(key))
+                          }
+                        >
+                          <Label>Catalog Product</Label>
+                          <Select.Trigger>
+                            <Select.Value />
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              {activeProducts.map((p) => (
+                                <ListBox.Item
+                                  key={p.id}
+                                  id={p.id}
+                                  textValue={p.name}
+                                >
+                                  {p.name}
+                                  <ListBox.ItemIndicator />
+                                </ListBox.Item>
+                              ))}
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
 
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-foreground">
-                      Substrate / Stock
-                    </label>
-                    <select
-                      value={material}
-                      onChange={(e) => setMaterial(e.target.value)}
-                      className="h-10 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
-                    >
-                      {selectedProduct?.materials.map((m) => (
-                        <option key={m.name} value={m.name}>
-                          {m.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                        <Select
+                          variant="secondary"
+                          value={selectedSizeId}
+                          onChange={(key) =>
+                            key && setSelectedSizeId(String(key))
+                          }
+                        >
+                          <Label>Base Size Schedule</Label>
+                          <Select.Trigger>
+                            <Select.Value />
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              {(selectedProduct?.sizes ?? []).map((sz) => {
+                                const label = `${sz.sizeLabel} — ${formatCurrency(sz.unitPrice)}`;
+                                return (
+                                  <ListBox.Item
+                                    key={sz.id}
+                                    id={sz.id}
+                                    textValue={label}
+                                  >
+                                    {label}
+                                    <ListBox.ItemIndicator />
+                                  </ListBox.Item>
+                                );
+                              })}
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
 
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-foreground">
-                      Finishing / Lamination
-                    </label>
-                    <select
-                      value={finish}
-                      onChange={(e) => setFinish(e.target.value)}
-                      className="h-10 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
-                    >
-                      {selectedProduct?.finishes.map((f) => (
-                        <option key={f.name} value={f.name}>
-                          {f.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              ) : (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-foreground">
-                      Product / Format Type *
-                    </label>
-                    <input
-                      required
-                      value={customProductName}
-                      onChange={(e) => setCustomProductName(e.target.value)}
-                      placeholder="e.g., Rigid Packaging Box / Saddle-Stitched Catalog"
-                      className="h-10 w-full rounded-lg border border-separator bg-background px-3.5 text-sm text-foreground outline-none focus:border-accent"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-foreground">
-                      Preferred Paper / Board Stock
-                    </label>
-                    <input
-                      value={material}
-                      onChange={(e) => setMaterial(e.target.value)}
-                      placeholder="e.g., 300gsm Matte C2S / 1200gsm Chipboard"
-                      className="h-10 w-full rounded-lg border border-separator bg-background px-3.5 text-sm text-foreground outline-none focus:border-accent"
-                    />
-                  </div>
-                </div>
-              )}
+                        <Select
+                          variant="secondary"
+                          value={material}
+                          onChange={(key) => key && setMaterial(String(key))}
+                        >
+                          <Label>Substrate / Stock</Label>
+                          <Select.Trigger>
+                            <Select.Value />
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              {(selectedProduct?.materials ?? []).map((m) => (
+                                <ListBox.Item
+                                  key={m.name}
+                                  id={m.name}
+                                  textValue={m.name}
+                                >
+                                  {m.name}
+                                  <ListBox.ItemIndicator />
+                                </ListBox.Item>
+                              ))}
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
 
-              {/* Quantity, Custom Dimensions, Deadline */}
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-foreground">
-                    Target Quantity *
-                  </label>
-                  <input
-                    required
-                    type="number"
-                    min={1}
-                    value={quantity}
-                    onChange={(e) =>
-                      setQuantity(
-                        Math.max(1, Number.parseInt(e.target.value || "1", 10))
-                      )
-                    }
-                    className="h-10 w-full rounded-lg border border-separator bg-background px-3.5 font-mono text-sm font-medium text-foreground outline-none focus:border-accent tabular-nums"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-foreground">
-                    Custom Trim Size (Optional)
-                  </label>
-                  <input
-                    value={customDimensions}
-                    onChange={(e) => setCustomDimensions(e.target.value)}
-                    placeholder="e.g., 5.5 × 8.25 in + 3mm bleed"
-                    className="h-10 w-full rounded-lg border border-separator bg-background px-3.5 text-sm text-foreground outline-none focus:border-accent"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-foreground">
-                    Target Delivery Date
-                  </label>
-                  <input
-                    type="date"
-                    value={targetDate}
-                    onChange={(e) => setTargetDate(e.target.value)}
-                    className="h-10 w-full rounded-lg border border-separator bg-background px-3.5 text-sm text-foreground outline-none focus:border-accent"
-                  />
-                </div>
-              </div>
+                        <Select
+                          variant="secondary"
+                          value={finish}
+                          onChange={(key) => key && setFinish(String(key))}
+                        >
+                          <Label>Finishing / Lamination</Label>
+                          <Select.Trigger>
+                            <Select.Value />
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              {(selectedProduct?.finishes ?? []).map((f) => (
+                                <ListBox.Item
+                                  key={f.name}
+                                  id={f.name}
+                                  textValue={f.name}
+                                >
+                                  {f.name}
+                                  <ListBox.ItemIndicator />
+                                </ListBox.Item>
+                              ))}
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
+                      </div>
+                    ) : (
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <TextField
+                          isRequired
+                          name="customProductName"
+                          value={customProductName}
+                          onChange={setCustomProductName}
+                        >
+                          <Label>Product / Format Type</Label>
+                          <Input
+                            variant="secondary"
+                            placeholder="e.g., Rigid Packaging Box / Saddle-Stitched Catalog"
+                          />
+                          <FieldError />
+                        </TextField>
 
-              {/* Artwork & Notes */}
-              <div className="space-y-4">
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-foreground">
-                    Print-Ready Artwork URL (HTTPS — Google Drive, Dropbox,
-                    WeTransfer)
-                  </label>
-                  <input
-                    type="url"
-                    value={artworkUrl}
-                    onChange={(e) => setArtworkUrl(e.target.value)}
-                    placeholder="https://drive.google.com/..."
-                    className="h-10 w-full rounded-lg border border-separator bg-background px-3.5 font-mono text-xs text-foreground outline-none placeholder:font-sans focus:border-accent"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-foreground">
-                    Technical Notes & Finishing Instructions
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Specify Pantone spot colors, foil stamping, die-cut requirements, SKU breakdown, or shipping destination..."
-                    className="w-full rounded-lg border border-separator bg-background px-3.5 py-2.5 text-sm text-foreground outline-none focus:border-accent"
-                  />
-                </div>
-              </div>
-
-              {/* Client Contact */}
-              <div className="border-t border-separator pt-5">
-                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted">
-                  Client Contact Details
-                </h3>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-muted">
-                      Contact Name *
-                    </label>
-                    <input
-                      required
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      placeholder="Full name"
-                      className="h-10 w-full rounded-lg border border-separator bg-background px-3.5 text-sm text-foreground outline-none focus:border-accent"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-muted">
-                      Company / Organization (Optional)
-                    </label>
-                    <input
-                      value={companyName}
-                      onChange={(e) => setCompanyName(e.target.value)}
-                      placeholder="Company name"
-                      className="h-10 w-full rounded-lg border border-separator bg-background px-3.5 text-sm text-foreground outline-none focus:border-accent"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-muted">
-                      Email Address *
-                    </label>
-                    <input
-                      required
-                      type="email"
-                      value={customerEmail}
-                      onChange={(e) => setCustomerEmail(e.target.value)}
-                      placeholder="procurement@company.com"
-                      className="h-10 w-full rounded-lg border border-separator bg-background px-3.5 text-sm text-foreground outline-none focus:border-accent"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-muted">
-                      Telephone / Mobile *
-                    </label>
-                    <input
-                      required
-                      value={customerPhone}
-                      onChange={(e) => setCustomerPhone(e.target.value)}
-                      placeholder="+63 917 555 0199"
-                      className="h-10 w-full rounded-lg border border-separator bg-background px-3.5 text-sm text-foreground outline-none focus:border-accent"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-end">
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="lg"
-                  isDisabled={submitting}
-                >
-                  {submitting
-                    ? "Submitting Request..."
-                    : "Submit Quotation Inquiry"}
-                </Button>
-              </div>
-            </form>
-          </Card>
-
-          {/* Right Sidebar */}
-          <div className="space-y-5 lg:col-span-4">
-            <Card className="border border-separator bg-surface p-6 space-y-4">
-              <div className="text-xs font-semibold uppercase tracking-wider text-muted">
-                Catalog Benchmark
-              </div>
-
-              {jobMode === "catalog" && estimate && selectedProduct ? (
-                <div className="space-y-3 text-xs tabular-nums">
-                  <div className="rounded-lg border border-separator bg-background p-4 space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted">Volume Schedule</span>
-                      <Chip size="sm" color="default" variant="secondary">
-                        {estimate.appliedTier}
-                      </Chip>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted">Benchmark Unit Rate</span>
-                      <span className="font-mono font-medium text-foreground">
-                        {formatCurrency(estimate.effectiveUnitPrice)}
-                      </span>
-                    </div>
-                    {estimate.setupFee > 0 && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted">Setup / Plate</span>
-                        <span className="font-mono text-foreground">
-                          {formatCurrency(estimate.setupFee)}
-                        </span>
+                        <TextField
+                          name="material"
+                          value={material}
+                          onChange={setMaterial}
+                        >
+                          <Label>Preferred Paper / Board Stock</Label>
+                          <Input
+                            variant="secondary"
+                            placeholder="e.g., 300gsm Matte C2S / 1200gsm Chipboard"
+                          />
+                        </TextField>
                       </div>
                     )}
-                    <div className="flex items-center justify-between border-t border-separator pt-2.5">
-                      <span className="font-medium text-foreground">
-                        Net Benchmark (Excl. VAT)
-                      </span>
-                      <span className="font-mono text-base font-semibold text-foreground">
-                        {formatCurrency(estimate.lineTotal)}
-                      </span>
+
+                    <div className="grid gap-4 sm:grid-cols-3">
+                      <NumberField
+                        isRequired
+                        minValue={1}
+                        step={10}
+                        variant="secondary"
+                        value={quantity}
+                        onChange={(v) =>
+                          !Number.isNaN(v) && setQuantity(Math.max(1, v))
+                        }
+                      >
+                        <Label>Target Quantity</Label>
+                        <NumberField.Group>
+                          <NumberField.DecrementButton />
+                          <NumberField.Input className="tabular-nums" />
+                          <NumberField.IncrementButton />
+                        </NumberField.Group>
+                      </NumberField>
+
+                      <TextField
+                        name="customDimensions"
+                        value={customDimensions}
+                        onChange={setCustomDimensions}
+                      >
+                        <Label>Custom Trim Size (Optional)</Label>
+                        <Input
+                          variant="secondary"
+                          placeholder="e.g., 5.5 × 8.25 in + 3mm bleed"
+                        />
+                      </TextField>
+
+                      <TextField
+                        name="targetDate"
+                        type="date"
+                        value={targetDate}
+                        onChange={setTargetDate}
+                      >
+                        <Label>Target Delivery Date</Label>
+                        <Input variant="secondary" />
+                      </TextField>
                     </div>
-                  </div>
-                  <p className="leading-relaxed text-muted">
-                    Formal quotations allow estimators to evaluate gang-run
-                    sheet imposition, multi-SKU splits, trade discounts, and
-                    freight consolidation.
-                  </p>
+
+                    <TextField
+                      name="artworkUrl"
+                      type="url"
+                      value={artworkUrl}
+                      onChange={setArtworkUrl}
+                    >
+                      <Label>Print-Ready Artwork URL (HTTPS)</Label>
+                      <InputGroup variant="secondary">
+                        <InputGroup.Prefix>
+                          <LinkIcon className="size-4 text-muted" />
+                        </InputGroup.Prefix>
+                        <InputGroup.Input placeholder="https://drive.google.com/..." />
+                      </InputGroup>
+                      <Description>
+                        Google Drive, Dropbox, or WeTransfer HTTPS link.
+                      </Description>
+                    </TextField>
+
+                    <TextField
+                      name="notes"
+                      value={notes}
+                      onChange={setNotes}
+                    >
+                      <Label>Technical Notes & Finishing Instructions</Label>
+                      <TextArea
+                        variant="secondary"
+                        rows={3}
+                        placeholder="Specify Pantone spot colors, foil stamping, die-cut requirements, SKU breakdown, or shipping destination..."
+                      />
+                    </TextField>
+                  </Fieldset.Group>
+                </Fieldset>
+
+                <Separator />
+
+                <Fieldset className="w-full">
+                  <Fieldset.Legend>Client Contact Details</Fieldset.Legend>
+                  <Fieldset.Group>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <TextField
+                        isRequired
+                        name="customerName"
+                        value={customerName}
+                        onChange={setCustomerName}
+                      >
+                        <Label>Contact Name</Label>
+                        <Input variant="secondary" placeholder="Full name" />
+                        <FieldError />
+                      </TextField>
+
+                      <TextField
+                        name="companyName"
+                        value={companyName}
+                        onChange={setCompanyName}
+                      >
+                        <Label>Company / Organization (Optional)</Label>
+                        <Input variant="secondary" placeholder="Company name" />
+                      </TextField>
+
+                      <TextField
+                        isRequired
+                        name="customerEmail"
+                        type="email"
+                        value={customerEmail}
+                        onChange={setCustomerEmail}
+                      >
+                        <Label>Email Address</Label>
+                        <Input
+                          variant="secondary"
+                          placeholder="procurement@company.com"
+                        />
+                        <FieldError />
+                      </TextField>
+
+                      <TextField
+                        isRequired
+                        name="customerPhone"
+                        type="tel"
+                        value={customerPhone}
+                        onChange={setCustomerPhone}
+                      >
+                        <Label>Telephone / Mobile</Label>
+                        <Input
+                          variant="secondary"
+                          placeholder="+63 917 555 0199"
+                        />
+                        <FieldError />
+                      </TextField>
+                    </div>
+                  </Fieldset.Group>
+                </Fieldset>
+
+                <div className="flex justify-end pt-2">
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="lg"
+                    isPending={submitting}
+                  >
+                    {({ isPending }) => (
+                      <>
+                        {isPending ? (
+                          <Spinner color="current" size="sm" />
+                        ) : (
+                          <FileText className="size-4" />
+                        )}
+                        {isPending
+                          ? "Submitting Request..."
+                          : "Submit Quotation Inquiry"}
+                      </>
+                    )}
+                  </Button>
                 </div>
-              ) : (
-                <p className="text-xs leading-relaxed text-muted">
-                  For custom trim dimensions and structural packaging, our
-                  pre-press estimators compute press sheet yield and finishing
-                  setup before issuing an itemized quotation under your
-                  reference code.
-                </p>
-              )}
+              </Form>
+            </Card.Content>
+          </Card>
+
+          {/* Right Benchmark & Support Sidebar */}
+          <div className="space-y-5 lg:col-span-4">
+            <Card>
+              <Card.Header>
+                <Card.Title>Catalog Benchmark</Card.Title>
+                <Card.Description>
+                  Real-time schedule reference prior to estimator review.
+                </Card.Description>
+              </Card.Header>
+              <Card.Content>
+                {jobMode === "catalog" && estimate && selectedProduct ? (
+                  <div className="space-y-3 text-xs tabular-nums">
+                    <Surface variant="secondary" className="rounded-2xl p-4 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted">Volume Schedule</span>
+                        <Chip size="sm" color="accent" variant="soft">
+                          <Chip.Label>{estimate.appliedTier}</Chip.Label>
+                        </Chip>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted">Benchmark Unit Rate</span>
+                        <span className="font-mono font-medium text-foreground">
+                          {formatCurrency(estimate.effectiveUnitPrice)}
+                        </span>
+                      </div>
+                      {estimate.setupFee > 0 && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted">Setup / Plate</span>
+                          <span className="font-mono text-foreground">
+                            {formatCurrency(estimate.setupFee)}
+                          </span>
+                        </div>
+                      )}
+                      <Separator />
+                      <div className="flex items-center justify-between pt-1">
+                        <span className="font-medium text-foreground">
+                          Net Benchmark (Excl. VAT)
+                        </span>
+                        <span className="font-mono text-base font-semibold text-foreground">
+                          {formatCurrency(estimate.lineTotal)}
+                        </span>
+                      </div>
+                    </Surface>
+                    <p className="leading-relaxed text-muted">
+                      Formal quotations allow estimators to evaluate gang-run
+                      sheet imposition, multi-SKU splits, trade discounts, and
+                      freight consolidation.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-xs leading-relaxed text-muted">
+                    For custom trim dimensions and structural packaging, our
+                    pre-press estimators compute press sheet yield and finishing
+                    setup before issuing an itemized quotation under your
+                    reference code.
+                  </p>
+                )}
+              </Card.Content>
             </Card>
 
-            <Card className="border border-separator bg-surface p-6 space-y-3 text-xs">
-              <h3 className="text-sm font-semibold text-foreground">
-                Pre-Press Consultation
-              </h3>
-              <p className="leading-relaxed text-muted">
-                Unsure which paper caliper or lamination suits your application?
-                Connect with an estimator in our live support ticket queue.
-              </p>
-              <Link href="/chat">
-                <Button variant="secondary" fullWidth>
-                  Open Support Queue
-                </Button>
-              </Link>
+            <Card>
+              <Card.Header>
+                <Card.Title>Pre-Press Consultation</Card.Title>
+                <Card.Description>
+                  Unsure which paper caliper or lamination suits your
+                  application? Connect with an estimator in our live support
+                  ticket queue.
+                </Card.Description>
+              </Card.Header>
+              <Card.Footer>
+                <NextLink href="/chat" className="w-full">
+                  <Button variant="secondary" fullWidth>
+                    <Comments className="size-4" />
+                    Open Support Queue
+                  </Button>
+                </NextLink>
+              </Card.Footer>
             </Card>
           </div>
         </div>

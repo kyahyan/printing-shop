@@ -1,16 +1,47 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import Link from "next/link";
-import { Button, Card, Chip, Tabs } from "@heroui/react";
+import NextLink from "next/link";
 import {
-  AlertCircle,
-  CheckCircle2,
+  ArrowsRotateLeft,
+  CircleFill,
+  Eye,
+  EyeSlash,
+  FloppyDisk,
+  LayoutCellsLarge,
+  PersonPlus,
   Plus,
-  RefreshCw,
-  Save,
-  Trash2,
-} from "lucide-react";
+  ShieldCheck,
+  TrashBin,
+  Tray,
+} from "@gravity-ui/icons";
+import {
+  Alert,
+  Avatar,
+  Button,
+  Card,
+  Chip,
+  EmptyState,
+  FieldError,
+  Fieldset,
+  Form,
+  Input,
+  InputGroup,
+  Label,
+  ListBox,
+  NumberField,
+  ScrollShadow,
+  Select,
+  Separator,
+  Spinner,
+  Surface,
+  Switch,
+  Tabs,
+  TextArea,
+  TextField,
+  Typography,
+  toast,
+} from "@heroui/react";
 import { usePrintShop } from "@/context/PrintShopContext";
 import type {
   AppSettings,
@@ -115,6 +146,7 @@ export default function SuperAdminPage() {
   const [staffDept, setStaffDept] = useState("Estimating & Pre-Press");
   const [staffRole, setStaffRole] = useState<UserRole>("employee");
   const [staffPass, setStaffPass] = useState("");
+  const [showStaffPass, setShowStaffPass] = useState(false);
   const [creatingStaff, setCreatingStaff] = useState(false);
   const [staffFeedback, setStaffFeedback] = useState<{
     type: "success" | "error";
@@ -123,33 +155,39 @@ export default function SuperAdminPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-7xl px-4 py-20 text-center text-sm text-muted">
-        Loading Administration Workspace...
+      <div className="mx-auto flex max-w-7xl items-center justify-center gap-3 px-4 py-20 text-sm text-muted">
+        <Spinner size="sm" />
+        <span>Loading Administration Workspace...</span>
       </div>
     );
   }
 
   if (currentUser?.role !== "super_admin") {
     return (
-      <div className="mx-auto max-w-md px-4 py-20 text-center">
-        <Card className="border border-separator bg-surface p-8 space-y-4">
-          <h1 className="text-lg font-semibold text-foreground">
-            Administrator Authorization Required
-          </h1>
-          <p className="text-xs leading-relaxed text-muted">
-            System settings, catalog pricing schedules, and staff permissions
-            are restricted to Super Administrators.
-          </p>
-          <div className="flex justify-center gap-2.5">
-            <Link href="/staff/login">
+      <div className="mx-auto max-w-md px-4 py-20">
+        <Card className="p-8 text-center">
+          <Card.Header className="items-center">
+            <div className="mb-2 flex size-11 items-center justify-center rounded-2xl bg-accent-soft text-accent-soft-foreground">
+              <ShieldCheck className="size-5" />
+            </div>
+            <Card.Title className="text-lg">
+              Administrator Authorization Required
+            </Card.Title>
+            <Card.Description>
+              System settings, catalog pricing schedules, and staff permissions
+              are restricted to Super Administrators.
+            </Card.Description>
+          </Card.Header>
+          <Card.Footer className="justify-center gap-2.5 pt-2">
+            <NextLink href="/staff/login">
               <Button variant="primary">Sign In</Button>
-            </Link>
+            </NextLink>
             {currentUser?.role === "employee" && (
-              <Link href="/dashboard">
+              <NextLink href="/dashboard">
                 <Button variant="secondary">Operations Desk</Button>
-              </Link>
+              </NextLink>
             )}
-          </div>
+          </Card.Footer>
         </Card>
       </div>
     );
@@ -241,7 +279,7 @@ export default function SuperAdminPage() {
     }));
   };
 
-  const handleSaveProduct = async (e: React.FormEvent) => {
+  const handleSaveProduct = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSavingProduct(true);
     setProductErrorMsg(null);
@@ -269,9 +307,9 @@ export default function SuperAdminPage() {
     }
 
     setEditingProduct(res.product);
-    setProductSavedMsg(
-      `Saved "${res.product.name}" (${res.product.sizes.length} size schedules) to database.`
-    );
+    const msg = `Saved "${res.product.name}" (${res.product.sizes.length} size schedules) to database.`;
+    setProductSavedMsg(msg);
+    toast.success(msg);
     setTimeout(() => setProductSavedMsg(null), 4000);
   };
 
@@ -285,11 +323,11 @@ export default function SuperAdminPage() {
     }
     setEditingProduct(remaining[0] ?? createBlankProduct(String(Date.now())));
     setProductSavedMsg("Product removed from database.");
+    toast.success("Product removed from database");
     setTimeout(() => setProductSavedMsg(null), 3000);
   };
 
-  // Staff Handler
-  const handleCreateStaff = async (e: React.FormEvent) => {
+  const handleCreateStaff = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setCreatingStaff(true);
     setStaffFeedback(null);
@@ -312,18 +350,19 @@ export default function SuperAdminPage() {
       return;
     }
 
+    const msg = `Provisioned ${staffRole.replace("_", " ")} account for ${staffEmail}.`;
     setStaffFeedback({
       type: "success",
-      message: `Provisioned ${staffRole.replace("_", " ")} account for ${staffEmail}.`,
+      message: msg,
     });
+    toast.success(msg);
     setStaffName("");
     setStaffEmail("");
     setStaffPhone("");
     setStaffPass("");
   };
 
-  // Settings Handler
-  const handleSaveSettings = async (e: React.FormEvent) => {
+  const handleSaveSettings = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSavingSettings(true);
     setSettingsErrorMsg(null);
@@ -338,6 +377,7 @@ export default function SuperAdminPage() {
     }
 
     setSettingsSavedMsg("Global system settings saved to database.");
+    toast.success("Global system settings saved");
     setTimeout(() => setSettingsSavedMsg(null), 4000);
   };
 
@@ -346,80 +386,89 @@ export default function SuperAdminPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-separator pb-5">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted">
-            System Administration · {currentUser.fullName} ({currentUser.email})
-          </p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
+          <Chip size="sm" variant="soft" color="accent" className="mb-2">
+            <ShieldCheck width={12} />
+            <Chip.Label>
+              System Administration · {currentUser.fullName} (
+              {currentUser.email})
+            </Chip.Label>
+          </Chip>
+          <Typography.Heading
+            level={1}
+            className="text-2xl font-bold tracking-tight"
+          >
             Catalog Pricing, Personnel & System Configuration
-          </h1>
+          </Typography.Heading>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <Button
             size="sm"
-            variant="ghost"
+            variant="tertiary"
             onPress={() => {
               void refreshData();
+              toast("Synced database state");
             }}
           >
-            <RefreshCw className="h-3.5 w-3.5" />
+            <ArrowsRotateLeft className="size-3.5" />
             Sync
           </Button>
-          <Link href="/dashboard">
+          <NextLink href="/dashboard">
             <Button size="sm" variant="secondary">
+              <LayoutCellsLarge className="size-3.5" />
               Operations Desk
             </Button>
-          </Link>
+          </NextLink>
         </div>
       </div>
 
-      {/* Executive KPI Ledger */}
-      <div className="grid grid-cols-2 divide-x divide-y divide-separator overflow-hidden rounded-xl border border-separator bg-surface lg:grid-cols-4 lg:divide-y-0 tabular-nums">
-        <div className="p-4">
-          <div className="text-xs text-muted">Booked Order Value</div>
-          <div className="mt-1 font-mono text-2xl font-semibold text-foreground">
+      {/* Executive KPI Cards */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 tabular-nums">
+        <Card className="p-4">
+          <Card.Description>Booked Order Value</Card.Description>
+          <div className="mt-1 font-mono text-2xl font-bold text-foreground">
             {formatCurrency(totalOrderRevenue)}
           </div>
-          <div className="mt-0.5 font-mono text-[11px] text-muted">
+          <div className="mt-0.5 font-mono text-xs text-muted">
             Collected: {formatCurrency(totalCollected)}
           </div>
-        </div>
+        </Card>
 
-        <div className="p-4">
-          <div className="text-xs text-muted">Open Quoted Pipeline</div>
-          <div className="mt-1 font-mono text-2xl font-semibold text-foreground">
+        <Card className="p-4">
+          <Card.Description>Open Quoted Pipeline</Card.Description>
+          <div className="mt-1 font-mono text-2xl font-bold text-foreground">
             {formatCurrency(quotedPipeline)}
           </div>
-          <div className="mt-0.5 text-[11px] text-muted">
+          <div className="mt-0.5 text-xs text-muted">
             {inquiries.length} total inquiries
           </div>
-        </div>
+        </Card>
 
-        <div className="p-4">
-          <div className="text-xs text-muted">Catalog Lines</div>
-          <div className="mt-1 text-2xl font-semibold text-foreground">
+        <Card className="p-4">
+          <Card.Description>Catalog Lines</Card.Description>
+          <div className="mt-1 text-2xl font-bold text-foreground">
             {products.length}
           </div>
-          <div className="mt-0.5 text-[11px] text-muted">
+          <div className="mt-0.5 text-xs text-muted">
             {products.reduce((s, p) => s + p.sizes.length, 0)} size schedules
           </div>
-        </div>
+        </Card>
 
-        <div className="p-4">
-          <div className="text-xs text-muted">Personnel & Queue</div>
-          <div className="mt-1 text-2xl font-semibold text-foreground">
+        <Card className="p-4">
+          <Card.Description>Personnel & Queue</Card.Description>
+          <div className="mt-1 text-2xl font-bold text-foreground">
             {users.filter((u) => u.role !== "customer").length} staff
           </div>
-          <div className="mt-0.5 text-[11px] text-muted">
+          <div className="mt-0.5 text-xs text-muted">
             {tickets.filter((t) => t.status === "queued").length} queued tickets
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* ADMINISTRATION TABS */}
-      <Tabs defaultSelectedKey="products" className="space-y-5">
+      <Tabs defaultSelectedKey="products" className="w-full">
         <Tabs.ListContainer>
           <Tabs.List aria-label="System administration modules">
             <Tabs.Tab id="products">
@@ -440,18 +489,24 @@ export default function SuperAdminPage() {
         {/* ================================================================
             TAB 1: PRODUCTS & PRICE-PER-SIZE MATRIX CRUD
         ================================================================ */}
-        <Tabs.Panel id="products" className="space-y-4">
+        <Tabs.Panel id="products" className="space-y-4 pt-5">
           {productSavedMsg && (
-            <div className="flex items-center gap-2 rounded-lg border border-separator bg-surface px-4 py-3 text-xs font-medium text-foreground">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              <span>{productSavedMsg}</span>
-            </div>
+            <Alert status="success">
+              <Alert.Indicator />
+              <Alert.Content>
+                <Alert.Title>Catalog Updated</Alert.Title>
+                <Alert.Description>{productSavedMsg}</Alert.Description>
+              </Alert.Content>
+            </Alert>
           )}
           {productErrorMsg && (
-            <div className="flex items-center gap-2 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-xs text-danger">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>{productErrorMsg}</span>
-            </div>
+            <Alert status="danger">
+              <Alert.Indicator />
+              <Alert.Content>
+                <Alert.Title>Save Failed</Alert.Title>
+                <Alert.Description>{productErrorMsg}</Alert.Description>
+              </Alert.Content>
+            </Alert>
           )}
 
           <div className="grid gap-6 lg:grid-cols-12">
@@ -466,87 +521,89 @@ export default function SuperAdminPage() {
                   setEditingProduct(createBlankProduct(String(Date.now())));
                 }}
               >
-                <Plus className="h-4 w-4" />
+                <Plus className="size-4" />
                 New Product Schedule
               </Button>
 
               {products.length === 0 ? (
-                <Card className="border border-separator bg-surface p-6 space-y-1.5">
-                  <div className="text-sm font-semibold text-foreground">
-                    No catalog lines published
-                  </div>
-                  <p className="text-xs leading-relaxed text-muted">
-                    Complete the specification and per-size pricing form on the
-                    right and click{" "}
-                    <strong className="text-foreground">Save Schedule</strong>{" "}
-                    to publish your first product line.
-                  </p>
+                <Card className="p-6">
+                  <EmptyState className="flex flex-col items-center justify-center gap-2 py-4 text-center">
+                    <Tray className="size-6 text-muted" />
+                    <div className="text-sm font-semibold text-foreground">
+                      No catalog lines published
+                    </div>
+                    <p className="text-xs leading-relaxed text-muted">
+                      Complete the specification and per-size pricing form on
+                      the right and click{" "}
+                      <strong className="text-foreground">Save Schedule</strong>{" "}
+                      to publish your first product line.
+                    </p>
+                  </EmptyState>
                 </Card>
               ) : (
-                <div className="max-h-[650px] space-y-2 overflow-y-auto pr-1">
-                  {products.map((prod) => {
-                    const selected = editingProduct.id === prod.id;
-                    return (
-                      <Card
-                        key={prod.id}
-                        onClick={() => {
-                          setProductErrorMsg(null);
-                          setEditingProduct(prod);
-                        }}
-                        className={`cursor-pointer border p-4 transition-colors tabular-nums ${
-                          selected
-                            ? "border-foreground/40 bg-surface-secondary"
-                            : "border-separator bg-surface hover:bg-surface-secondary/50"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs text-muted">
-                            {prod.category}
-                          </span>
-                          <Chip
-                            size="sm"
-                            color={prod.isActive ? "success" : "default"}
-                            variant="soft"
-                          >
-                            {prod.isActive ? "Published" : "Hidden"}
-                          </Chip>
-                        </div>
-                        <div className="mt-1 text-sm font-semibold text-foreground">
-                          {prod.name}
-                        </div>
-                        <div className="mt-1 text-xs text-muted">
-                          {prod.sizes.length} sizes · Min {prod.minOrderQty}{" "}
-                          {prod.baseUnit}
-                        </div>
-                      </Card>
-                    );
-                  })}
-                </div>
+                <ScrollShadow className="max-h-[650px] pr-1">
+                  <div className="space-y-2.5">
+                    {products.map((prod) => {
+                      const selected = editingProduct.id === prod.id;
+                      return (
+                        <Card
+                          key={prod.id}
+                          variant={selected ? "secondary" : "default"}
+                          onClick={() => {
+                            setProductErrorMsg(null);
+                            setEditingProduct(prod);
+                          }}
+                          className="cursor-pointer p-4 tabular-nums transition-colors"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs text-muted">
+                              {prod.category}
+                            </span>
+                            <Chip
+                              size="sm"
+                              color={prod.isActive ? "success" : "default"}
+                              variant="soft"
+                            >
+                              <Chip.Label>
+                                {prod.isActive ? "Published" : "Hidden"}
+                              </Chip.Label>
+                            </Chip>
+                          </div>
+                          <div className="mt-1 text-sm font-semibold text-foreground">
+                            {prod.name}
+                          </div>
+                          <div className="mt-1 text-xs text-muted">
+                            {prod.sizes.length} sizes · Min {prod.minOrderQty}{" "}
+                            {prod.baseUnit}
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </ScrollShadow>
               )}
             </div>
 
             {/* Product & Price-Per-Size Matrix Editor */}
             <div className="lg:col-span-8">
-              <Card className="border border-separator bg-surface p-6">
-                <form onSubmit={handleSaveProduct} className="space-y-6">
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-separator pb-4">
+              <Card className="p-6">
+                <Form
+                  onSubmit={handleSaveProduct}
+                  className="flex flex-col gap-6"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <h2 className="text-base font-semibold text-foreground">
+                      <Card.Title className="text-lg">
                         {isSavedProduct
                           ? `Edit Schedule: ${editingProduct.name}`
                           : "Create Product Schedule"}
-                      </h2>
-                      <p className="text-xs text-muted">
+                      </Card.Title>
+                      <Card.Description>
                         Persists directly to{" "}
-                        <code className="font-mono text-foreground">
-                          products
-                        </code>{" "}
-                        and{" "}
-                        <code className="font-mono text-foreground">
-                          product_sizes
-                        </code>{" "}
-                        with server-side order pricing enforcement.
-                      </p>
+                        <Typography.Code>products</Typography.Code> and{" "}
+                        <Typography.Code>product_sizes</Typography.Code> with
+                        server-side order pricing enforcement.
+                      </Card.Description>
                     </div>
                     <div className="flex items-center gap-2">
                       {isSavedProduct && (
@@ -555,7 +612,7 @@ export default function SuperAdminPage() {
                           variant="danger-soft"
                           onPress={handleDeleteCurrentProduct}
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
+                          <TrashBin className="size-3.5" />
                           Delete
                         </Button>
                       )}
@@ -563,202 +620,239 @@ export default function SuperAdminPage() {
                         type="submit"
                         size="sm"
                         variant="primary"
-                        isDisabled={savingProduct}
+                        isPending={savingProduct}
                       >
-                        <Save className="h-3.5 w-3.5" />
-                        {savingProduct ? "Saving..." : "Save Schedule"}
+                        {({ isPending }) => (
+                          <>
+                            {isPending ? (
+                              <Spinner color="current" size="sm" />
+                            ) : (
+                              <FloppyDisk className="size-3.5" />
+                            )}
+                            {isPending ? "Saving..." : "Save Schedule"}
+                          </>
+                        )}
                       </Button>
                     </div>
                   </div>
 
+                  <Separator />
+
                   {/* Core Metadata */}
-                  <div className="grid gap-4 sm:grid-cols-3">
-                    <div className="sm:col-span-2">
-                      <label className="mb-1 block text-xs font-medium text-foreground">
-                        Product Name *
-                      </label>
-                      <input
-                        required
-                        value={editingProduct.name}
-                        onChange={(e) =>
-                          setEditingProduct((prev) => ({
-                            ...prev,
-                            name: e.target.value,
-                          }))
-                        }
-                        placeholder="e.g., Commercial Flyers / Large Format Tarpaulin"
-                        className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm font-medium text-foreground outline-none focus:border-accent"
-                      />
-                    </div>
+                  <Fieldset className="w-full">
+                    <Fieldset.Legend>Product Details</Fieldset.Legend>
+                    <Fieldset.Group>
+                      <div className="grid gap-4 sm:grid-cols-3">
+                        <TextField
+                          isRequired
+                          className="sm:col-span-2"
+                          name="productName"
+                          value={editingProduct.name}
+                          onChange={(val) =>
+                            setEditingProduct((prev) => ({
+                              ...prev,
+                              name: val,
+                            }))
+                          }
+                        >
+                          <Label>Product Name</Label>
+                          <Input
+                            variant="secondary"
+                            placeholder="e.g., Commercial Flyers / Large Format Tarpaulin"
+                          />
+                          <FieldError />
+                        </TextField>
 
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-foreground">
-                        Category *
-                      </label>
-                      <input
-                        required
-                        value={editingProduct.category}
-                        onChange={(e) =>
-                          setEditingProduct((prev) => ({
-                            ...prev,
-                            category: e.target.value,
-                          }))
-                        }
-                        placeholder="e.g., Commercial Print"
-                        className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
-                      />
-                    </div>
+                        <TextField
+                          isRequired
+                          name="category"
+                          value={editingProduct.category}
+                          onChange={(val) =>
+                            setEditingProduct((prev) => ({
+                              ...prev,
+                              category: val,
+                            }))
+                          }
+                        >
+                          <Label>Category</Label>
+                          <Input
+                            variant="secondary"
+                            placeholder="e.g., Commercial Print"
+                          />
+                          <FieldError />
+                        </TextField>
 
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-foreground">
-                        Pricing Unit *
-                      </label>
-                      <input
-                        required
-                        value={editingProduct.baseUnit}
-                        onChange={(e) =>
-                          setEditingProduct((prev) => ({
-                            ...prev,
-                            baseUnit: e.target.value,
-                          }))
-                        }
-                        placeholder="per pc / per box / per sq.ft"
-                        className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
-                      />
-                    </div>
+                        <TextField
+                          isRequired
+                          name="baseUnit"
+                          value={editingProduct.baseUnit}
+                          onChange={(val) =>
+                            setEditingProduct((prev) => ({
+                              ...prev,
+                              baseUnit: val,
+                            }))
+                          }
+                        >
+                          <Label>Pricing Unit</Label>
+                          <Input
+                            variant="secondary"
+                            placeholder="per pc / per box / per sq.ft"
+                          />
+                          <FieldError />
+                        </TextField>
 
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-foreground">
-                        Minimum Order Qty
-                      </label>
-                      <input
-                        type="number"
-                        min={1}
-                        value={editingProduct.minOrderQty}
-                        onChange={(e) =>
-                          setEditingProduct((prev) => ({
-                            ...prev,
-                            minOrderQty: Math.max(
-                              1,
-                              Number.parseInt(e.target.value || "1", 10)
-                            ),
-                          }))
-                        }
-                        className="h-9 w-full rounded-lg border border-separator bg-background px-3 font-mono text-sm text-foreground outline-none focus:border-accent tabular-nums"
-                      />
-                    </div>
+                        <NumberField
+                          minValue={1}
+                          step={1}
+                          variant="secondary"
+                          value={editingProduct.minOrderQty}
+                          onChange={(v) =>
+                            !Number.isNaN(v) &&
+                            setEditingProduct((prev) => ({
+                              ...prev,
+                              minOrderQty: Math.max(1, v),
+                            }))
+                          }
+                        >
+                          <Label>Minimum Order Qty</Label>
+                          <NumberField.Group>
+                            <NumberField.DecrementButton />
+                            <NumberField.Input className="tabular-nums" />
+                            <NumberField.IncrementButton />
+                          </NumberField.Group>
+                        </NumberField>
 
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-foreground">
-                        Standard Lead Time
-                      </label>
-                      <input
-                        value={editingProduct.leadTimeDays}
-                        onChange={(e) =>
-                          setEditingProduct((prev) => ({
-                            ...prev,
-                            leadTimeDays: e.target.value,
-                          }))
-                        }
-                        placeholder="2–3 business days"
-                        className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
-                      />
-                    </div>
-                  </div>
+                        <TextField
+                          name="leadTimeDays"
+                          value={editingProduct.leadTimeDays}
+                          onChange={(val) =>
+                            setEditingProduct((prev) => ({
+                              ...prev,
+                              leadTimeDays: val,
+                            }))
+                          }
+                        >
+                          <Label>Standard Lead Time</Label>
+                          <Input
+                            variant="secondary"
+                            placeholder="2–3 business days"
+                          />
+                        </TextField>
+                      </div>
 
-                  <div className="grid items-center gap-4 sm:grid-cols-3">
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-foreground">
-                        Specification Tag (Optional)
-                      </label>
-                      <input
-                        value={editingProduct.badge || ""}
-                        onChange={(e) =>
-                          setEditingProduct((prev) => ({
-                            ...prev,
-                            badge: e.target.value || undefined,
-                          }))
-                        }
-                        placeholder="Offset / Same-Day Eligible"
-                        className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-xs text-foreground outline-none focus:border-accent"
-                      />
-                    </div>
+                      <div className="grid items-end gap-4 sm:grid-cols-3">
+                        <TextField
+                          name="badge"
+                          value={editingProduct.badge || ""}
+                          onChange={(val) =>
+                            setEditingProduct((prev) => ({
+                              ...prev,
+                              badge: val || undefined,
+                            }))
+                          }
+                        >
+                          <Label>Specification Tag (Optional)</Label>
+                          <Input
+                            variant="secondary"
+                            placeholder="Offset / Same-Day Eligible"
+                          />
+                        </TextField>
 
-                    <label className="flex items-center gap-2 pt-4 text-xs font-medium text-foreground">
-                      <input
-                        type="checkbox"
-                        checked={editingProduct.isActive}
-                        onChange={(e) =>
-                          setEditingProduct((prev) => ({
-                            ...prev,
-                            isActive: e.target.checked,
-                          }))
-                        }
-                        className="h-4 w-4 accent-current"
-                      />
-                      Published in Public Catalog
-                    </label>
+                        <Surface
+                          variant="secondary"
+                          className="rounded-2xl px-3.5 py-2.5"
+                        >
+                          <Switch
+                            isSelected={editingProduct.isActive}
+                            onChange={(val) =>
+                              setEditingProduct((prev) => ({
+                                ...prev,
+                                isActive: val,
+                              }))
+                            }
+                          >
+                            <Switch.Content className="text-xs font-medium">
+                              <Switch.Control>
+                                <Switch.Thumb />
+                              </Switch.Control>
+                              Published in Catalog
+                            </Switch.Content>
+                          </Switch>
+                        </Surface>
 
-                    <label className="flex items-center gap-2 pt-4 text-xs font-medium text-foreground">
-                      <input
-                        type="checkbox"
-                        checked={editingProduct.featured}
-                        onChange={(e) =>
-                          setEditingProduct((prev) => ({
-                            ...prev,
-                            featured: e.target.checked,
-                          }))
-                        }
-                        className="h-4 w-4 accent-current"
-                      />
-                      Featured on Storefront
-                    </label>
-                  </div>
+                        <Surface
+                          variant="secondary"
+                          className="rounded-2xl px-3.5 py-2.5"
+                        >
+                          <Switch
+                            isSelected={editingProduct.featured}
+                            onChange={(val) =>
+                              setEditingProduct((prev) => ({
+                                ...prev,
+                                featured: val,
+                              }))
+                            }
+                          >
+                            <Switch.Content className="text-xs font-medium">
+                              <Switch.Control>
+                                <Switch.Thumb />
+                              </Switch.Control>
+                              Featured Line
+                            </Switch.Content>
+                          </Switch>
+                        </Surface>
+                      </div>
 
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-foreground">
-                        Catalog Summary *
-                      </label>
-                      <input
-                        required
-                        value={editingProduct.shortDescription}
-                        onChange={(e) =>
-                          setEditingProduct((prev) => ({
-                            ...prev,
-                            shortDescription: e.target.value,
-                          }))
-                        }
-                        placeholder="Concise summary shown on directory cards"
-                        className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-xs text-foreground outline-none focus:border-accent"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-foreground">
-                        Detailed Technical Description
-                      </label>
-                      <input
-                        value={editingProduct.description}
-                        onChange={(e) =>
-                          setEditingProduct((prev) => ({
-                            ...prev,
-                            description: e.target.value,
-                          }))
-                        }
-                        placeholder="Full specifications shown in configurator modal"
-                        className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-xs text-foreground outline-none focus:border-accent"
-                      />
-                    </div>
-                  </div>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <TextField
+                          isRequired
+                          name="shortDescription"
+                          value={editingProduct.shortDescription}
+                          onChange={(val) =>
+                            setEditingProduct((prev) => ({
+                              ...prev,
+                              shortDescription: val,
+                            }))
+                          }
+                        >
+                          <Label>Catalog Summary</Label>
+                          <Input
+                            variant="secondary"
+                            placeholder="Concise summary shown on directory cards"
+                          />
+                          <FieldError />
+                        </TextField>
+
+                        <TextField
+                          name="description"
+                          value={editingProduct.description}
+                          onChange={(val) =>
+                            setEditingProduct((prev) => ({
+                              ...prev,
+                              description: val,
+                            }))
+                          }
+                        >
+                          <Label>Detailed Technical Description</Label>
+                          <Input
+                            variant="secondary"
+                            placeholder="Full specifications shown in configurator modal"
+                          />
+                        </TextField>
+                      </div>
+                    </Fieldset.Group>
+                  </Fieldset>
+
+                  <Separator />
 
                   {/* PRICE PER SIZE MATRIX EDITOR */}
-                  <div className="space-y-3 border-t border-separator pt-5">
+                  <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">
+                        <div className="text-xs font-semibold uppercase tracking-wider text-muted">
                           Per-Size Rate Schedule ({settings.currencySymbol})
-                        </h3>
-                        <p className="mt-0.5 text-[11px] text-muted">
+                        </div>
+                        <p className="mt-0.5 text-xs text-muted">
                           Define base unit rate, optional 100+ and 500+ volume
                           rates, and plate/setup fee per size.
                         </p>
@@ -768,166 +862,146 @@ export default function SuperAdminPage() {
                         variant="secondary"
                         onPress={handleAddSizeTier}
                       >
-                        <Plus className="h-3.5 w-3.5" />
+                        <Plus className="size-3.5" />
                         Add Size
                       </Button>
                     </div>
 
-                    <div className="space-y-2 tabular-nums">
+                    <div className="space-y-3 tabular-nums">
                       {editingProduct.sizes.map((sz) => (
-                        <div
+                        <Surface
                           key={sz.id}
-                          className="grid items-end gap-2 rounded-lg border border-separator bg-background p-3 sm:grid-cols-12"
+                          variant="secondary"
+                          className="grid items-end gap-2.5 rounded-2xl p-3.5 sm:grid-cols-12"
                         >
-                          <div className="sm:col-span-3">
-                            <label className="mb-0.5 block text-[10px] text-muted">
-                              Size Label *
-                            </label>
-                            <input
-                              required
-                              value={sz.sizeLabel}
-                              onChange={(e) =>
-                                handleSizeChange(
-                                  sz.id,
-                                  "sizeLabel",
-                                  e.target.value
-                                )
-                              }
-                              placeholder="A4 / 2ft × 5ft"
-                              className="h-8 w-full rounded-md border border-separator bg-surface px-2.5 text-xs font-medium text-foreground outline-none focus:border-accent"
-                            />
-                          </div>
+                          <TextField
+                            isRequired
+                            className="sm:col-span-3"
+                            value={sz.sizeLabel}
+                            onChange={(val) =>
+                              handleSizeChange(sz.id, "sizeLabel", val)
+                            }
+                          >
+                            <Label>Size Label</Label>
+                            <Input placeholder="A4 / 2ft × 5ft" />
+                          </TextField>
 
-                          <div className="sm:col-span-3">
-                            <label className="mb-0.5 block text-[10px] text-muted">
-                              Dimensions *
-                            </label>
-                            <input
-                              required
-                              value={sz.dimensions}
-                              onChange={(e) =>
-                                handleSizeChange(
-                                  sz.id,
-                                  "dimensions",
-                                  e.target.value
-                                )
-                              }
+                          <TextField
+                            isRequired
+                            className="sm:col-span-3"
+                            value={sz.dimensions}
+                            onChange={(val) =>
+                              handleSizeChange(sz.id, "dimensions", val)
+                            }
+                          >
+                            <Label>Dimensions</Label>
+                            <Input
                               placeholder="210 × 297 mm"
-                              className="h-8 w-full rounded-md border border-separator bg-surface px-2.5 font-mono text-xs text-foreground outline-none focus:border-accent"
+                              className="font-mono"
                             />
-                          </div>
+                          </TextField>
 
-                          <div className="sm:col-span-2">
-                            <label className="mb-0.5 block text-[10px] text-muted">
-                              Base Rate *
-                            </label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              min={0}
-                              required
-                              value={sz.unitPrice}
-                              onChange={(e) =>
-                                handleSizeChange(
-                                  sz.id,
-                                  "unitPrice",
-                                  Number.parseFloat(e.target.value || "0")
-                                )
-                              }
-                              className="h-8 w-full rounded-md border border-separator bg-surface px-2 font-mono text-xs font-semibold text-foreground outline-none focus:border-accent"
-                            />
-                          </div>
+                          <NumberField
+                            isRequired
+                            className="sm:col-span-2"
+                            minValue={0}
+                            step={0.5}
+                            value={sz.unitPrice}
+                            onChange={(v) =>
+                              !Number.isNaN(v) &&
+                              handleSizeChange(sz.id, "unitPrice", v)
+                            }
+                          >
+                            <Label>Base Rate</Label>
+                            <NumberField.Group>
+                              <NumberField.Input />
+                            </NumberField.Group>
+                          </NumberField>
 
-                          <div className="sm:col-span-1">
-                            <label className="mb-0.5 block text-[10px] text-muted">
-                              100+
-                            </label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              min={0}
-                              value={sz.bulk100Price ?? ""}
-                              onChange={(e) =>
-                                handleSizeChange(
-                                  sz.id,
-                                  "bulk100Price",
-                                  e.target.value
-                                    ? Number.parseFloat(e.target.value)
-                                    : undefined
-                                )
-                              }
-                              className="h-8 w-full rounded-md border border-separator bg-surface px-2 font-mono text-xs text-foreground outline-none focus:border-accent"
-                            />
-                          </div>
+                          <NumberField
+                            className="sm:col-span-1"
+                            minValue={0}
+                            step={0.5}
+                            value={sz.bulk100Price ?? NaN}
+                            onChange={(v) =>
+                              handleSizeChange(
+                                sz.id,
+                                "bulk100Price",
+                                Number.isNaN(v) ? undefined : v
+                              )
+                            }
+                          >
+                            <Label>100+</Label>
+                            <NumberField.Group>
+                              <NumberField.Input placeholder="—" />
+                            </NumberField.Group>
+                          </NumberField>
 
-                          <div className="sm:col-span-1">
-                            <label className="mb-0.5 block text-[10px] text-muted">
-                              500+
-                            </label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              min={0}
-                              value={sz.bulk500Price ?? ""}
-                              onChange={(e) =>
-                                handleSizeChange(
-                                  sz.id,
-                                  "bulk500Price",
-                                  e.target.value
-                                    ? Number.parseFloat(e.target.value)
-                                    : undefined
-                                )
-                              }
-                              className="h-8 w-full rounded-md border border-separator bg-surface px-2 font-mono text-xs text-foreground outline-none focus:border-accent"
-                            />
-                          </div>
+                          <NumberField
+                            className="sm:col-span-1"
+                            minValue={0}
+                            step={0.5}
+                            value={sz.bulk500Price ?? NaN}
+                            onChange={(v) =>
+                              handleSizeChange(
+                                sz.id,
+                                "bulk500Price",
+                                Number.isNaN(v) ? undefined : v
+                              )
+                            }
+                          >
+                            <Label>500+</Label>
+                            <NumberField.Group>
+                              <NumberField.Input placeholder="—" />
+                            </NumberField.Group>
+                          </NumberField>
 
-                          <div className="sm:col-span-1">
-                            <label className="mb-0.5 block text-[10px] text-muted">
-                              Setup
-                            </label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              min={0}
-                              value={sz.setupFee}
-                              onChange={(e) =>
-                                handleSizeChange(
-                                  sz.id,
-                                  "setupFee",
-                                  Number.parseFloat(e.target.value || "0")
-                                )
-                              }
-                              className="h-8 w-full rounded-md border border-separator bg-surface px-2 font-mono text-xs text-foreground outline-none focus:border-accent"
-                            />
-                          </div>
+                          <NumberField
+                            className="sm:col-span-1"
+                            minValue={0}
+                            step={10}
+                            value={sz.setupFee}
+                            onChange={(v) =>
+                              !Number.isNaN(v) &&
+                              handleSizeChange(sz.id, "setupFee", v)
+                            }
+                          >
+                            <Label>Setup</Label>
+                            <NumberField.Group>
+                              <NumberField.Input />
+                            </NumberField.Group>
+                          </NumberField>
 
                           <div className="flex justify-end sm:col-span-1">
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveSizeTier(sz.id)}
-                              disabled={editingProduct.sizes.length <= 1}
-                              className="rounded p-1.5 text-muted hover:text-danger disabled:opacity-30"
+                            <Button
+                              size="sm"
+                              variant="danger-soft"
+                              isIconOnly
+                              isDisabled={editingProduct.sizes.length <= 1}
                               aria-label="Remove size tier"
+                              onPress={() => handleRemoveSizeTier(sz.id)}
                             >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+                              <TrashBin className="size-3.5" />
+                            </Button>
                           </div>
-                        </div>
+                        </Surface>
                       ))}
                     </div>
                   </div>
 
+                  <Separator />
+
                   {/* SUBSTRATES & FINISHES */}
-                  <div className="grid gap-4 border-t border-separator pt-5 sm:grid-cols-2">
-                    <div className="space-y-2">
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <div className="space-y-2.5">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-foreground">
+                        <span className="text-xs font-semibold text-foreground">
                           Substrates & Multipliers (1.0 = Base)
                         </span>
-                        <button
-                          type="button"
-                          onClick={() =>
+                        <Button
+                          size="sm"
+                          variant="tertiary"
+                          onPress={() =>
                             setEditingProduct((prev) => ({
                               ...prev,
                               materials: [
@@ -936,60 +1010,68 @@ export default function SuperAdminPage() {
                               ],
                             }))
                           }
-                          className="text-xs font-medium text-accent hover:underline"
                         >
-                          + Add Substrate
-                        </button>
+                          <Plus className="size-3.5" />
+                          Add
+                        </Button>
                       </div>
                       {editingProduct.materials.map((m, idx) => (
-                        <div key={idx} className="flex items-center gap-2">
-                          <input
-                            required
+                        <Surface
+                          key={idx}
+                          variant="secondary"
+                          className="flex items-center gap-2 rounded-2xl p-2.5"
+                        >
+                          <TextField
+                            isRequired
+                            aria-label="Substrate name"
+                            className="flex-1"
                             value={m.name}
-                            onChange={(e) =>
-                              handleMaterialChange(idx, {
-                                name: e.target.value,
-                              })
+                            onChange={(val) =>
+                              handleMaterialChange(idx, { name: val })
                             }
-                            placeholder="Stock / Paper GSM"
-                            className="h-8 flex-1 rounded-md border border-separator bg-background px-2.5 text-xs text-foreground outline-none focus:border-accent"
-                          />
-                          <input
-                            type="number"
-                            step="0.05"
-                            min={0.1}
-                            value={m.priceMultiplier}
-                            onChange={(e) =>
-                              handleMaterialChange(idx, {
-                                priceMultiplier: Number.parseFloat(
-                                  e.target.value || "1"
-                                ),
-                              })
-                            }
-                            className="h-8 w-20 rounded-md border border-separator bg-background px-2 font-mono text-xs text-foreground outline-none focus:border-accent tabular-nums"
-                            title="Multiplier (1.0 = base)"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveMaterial(idx)}
-                            disabled={editingProduct.materials.length <= 1}
-                            className="rounded p-1 text-muted hover:text-danger disabled:opacity-30"
-                            aria-label="Remove material"
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
+                            <Input placeholder="Stock / Paper GSM" />
+                          </TextField>
+
+                          <NumberField
+                            aria-label="Price multiplier"
+                            className="w-24"
+                            minValue={0.1}
+                            step={0.05}
+                            value={m.priceMultiplier}
+                            onChange={(v) =>
+                              !Number.isNaN(v) &&
+                              handleMaterialChange(idx, { priceMultiplier: v })
+                            }
+                          >
+                            <NumberField.Group>
+                              <NumberField.Input className="tabular-nums" />
+                            </NumberField.Group>
+                          </NumberField>
+
+                          <Button
+                            size="sm"
+                            variant="danger-soft"
+                            isIconOnly
+                            isDisabled={editingProduct.materials.length <= 1}
+                            aria-label="Remove material"
+                            onPress={() => handleRemoveMaterial(idx)}
+                          >
+                            <TrashBin className="size-3.5" />
+                          </Button>
+                        </Surface>
                       ))}
                     </div>
 
-                    <div className="space-y-2">
+                    <div className="space-y-2.5">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-foreground">
+                        <span className="text-xs font-semibold text-foreground">
                           Finishes & Unit Add-Ons ({settings.currencySymbol})
                         </span>
-                        <button
-                          type="button"
-                          onClick={() =>
+                        <Button
+                          size="sm"
+                          variant="tertiary"
+                          onPress={() =>
                             setEditingProduct((prev) => ({
                               ...prev,
                               finishes: [
@@ -998,51 +1080,60 @@ export default function SuperAdminPage() {
                               ],
                             }))
                           }
-                          className="text-xs font-medium text-accent hover:underline"
                         >
-                          + Add Finish
-                        </button>
+                          <Plus className="size-3.5" />
+                          Add
+                        </Button>
                       </div>
                       {editingProduct.finishes.map((f, idx) => (
-                        <div key={idx} className="flex items-center gap-2">
-                          <input
-                            required
+                        <Surface
+                          key={idx}
+                          variant="secondary"
+                          className="flex items-center gap-2 rounded-2xl p-2.5"
+                        >
+                          <TextField
+                            isRequired
+                            aria-label="Finish name"
+                            className="flex-1"
                             value={f.name}
-                            onChange={(e) =>
-                              handleFinishChange(idx, { name: e.target.value })
+                            onChange={(val) =>
+                              handleFinishChange(idx, { name: val })
                             }
-                            placeholder="Lamination / Finish"
-                            className="h-8 flex-1 rounded-md border border-separator bg-background px-2.5 text-xs text-foreground outline-none focus:border-accent"
-                          />
-                          <input
-                            type="number"
-                            step="0.25"
-                            min={0}
-                            value={f.addPerUnit}
-                            onChange={(e) =>
-                              handleFinishChange(idx, {
-                                addPerUnit: Number.parseFloat(
-                                  e.target.value || "0"
-                                ),
-                              })
-                            }
-                            className="h-8 w-20 rounded-md border border-separator bg-background px-2 font-mono text-xs text-foreground outline-none focus:border-accent tabular-nums"
-                            title="Add-on per unit"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveFinish(idx)}
-                            disabled={editingProduct.finishes.length <= 1}
-                            className="rounded p-1 text-muted hover:text-danger disabled:opacity-30"
-                            aria-label="Remove finish"
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
+                            <Input placeholder="Lamination / Finish" />
+                          </TextField>
+
+                          <NumberField
+                            aria-label="Add per unit"
+                            className="w-24"
+                            minValue={0}
+                            step={0.5}
+                            value={f.addPerUnit}
+                            onChange={(v) =>
+                              !Number.isNaN(v) &&
+                              handleFinishChange(idx, { addPerUnit: v })
+                            }
+                          >
+                            <NumberField.Group>
+                              <NumberField.Input className="tabular-nums" />
+                            </NumberField.Group>
+                          </NumberField>
+
+                          <Button
+                            size="sm"
+                            variant="danger-soft"
+                            isIconOnly
+                            isDisabled={editingProduct.finishes.length <= 1}
+                            aria-label="Remove finish"
+                            onPress={() => handleRemoveFinish(idx)}
+                          >
+                            <TrashBin className="size-3.5" />
+                          </Button>
+                        </Surface>
                       ))}
                     </div>
                   </div>
-                </form>
+                </Form>
               </Card>
             </div>
           </div>
@@ -1051,569 +1142,661 @@ export default function SuperAdminPage() {
         {/* ================================================================
             TAB 2: EMPLOYEE & ROLE MANAGEMENT
         ================================================================ */}
-        <Tabs.Panel id="staff" className="grid gap-6 lg:grid-cols-12">
-          <Card className="border border-separator bg-surface p-6 space-y-4 lg:col-span-5">
-            <div>
-              <h2 className="text-base font-semibold text-foreground">
+        <Tabs.Panel id="staff" className="grid gap-6 pt-5 lg:grid-cols-12">
+          <Card className="p-6 lg:col-span-5">
+            <Card.Header>
+              <Card.Title className="text-base">
                 Provision Staff Account
-              </h2>
-              <p className="mt-0.5 text-xs text-muted">
+              </Card.Title>
+              <Card.Description>
                 Registers a Supabase Auth account and assigns staff permissions.
-              </p>
-            </div>
+              </Card.Description>
+            </Card.Header>
 
-            {staffFeedback && (
-              <div
-                className={`flex items-center gap-2 rounded-lg border px-3.5 py-2.5 text-xs ${
-                  staffFeedback.type === "success"
-                    ? "border-separator bg-surface-secondary text-foreground"
-                    : "border-danger/30 bg-danger/10 text-danger"
-                }`}
+            <Card.Content className="space-y-4 pt-4">
+              {staffFeedback && (
+                <Alert
+                  status={
+                    staffFeedback.type === "success" ? "success" : "danger"
+                  }
+                >
+                  <Alert.Indicator />
+                  <Alert.Content>
+                    <Alert.Description>
+                      {staffFeedback.message}
+                    </Alert.Description>
+                  </Alert.Content>
+                </Alert>
+              )}
+
+              <Form
+                onSubmit={handleCreateStaff}
+                className="flex flex-col gap-3.5"
               >
-                {staffFeedback.type === "success" ? (
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                ) : (
-                  <AlertCircle className="h-4 w-4 shrink-0" />
-                )}
-                <span>{staffFeedback.message}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleCreateStaff} className="space-y-3.5">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-foreground">
-                  Full Name *
-                </label>
-                <input
-                  required
+                <TextField
+                  isRequired
+                  name="staffName"
                   value={staffName}
-                  onChange={(e) => setStaffName(e.target.value)}
-                  placeholder="Full name"
-                  className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-foreground">
-                  Work Email *
-                </label>
-                <input
-                  required
+                  onChange={setStaffName}
+                >
+                  <Label>Full Name</Label>
+                  <Input variant="secondary" placeholder="Full name" />
+                  <FieldError />
+                </TextField>
+
+                <TextField
+                  isRequired
+                  name="staffEmail"
                   type="email"
                   value={staffEmail}
-                  onChange={(e) => setStaffEmail(e.target.value)}
-                  placeholder="staff@clayjar.com.ph"
-                  className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-foreground">
-                    Telephone
-                  </label>
-                  <input
+                  onChange={setStaffEmail}
+                >
+                  <Label>Work Email</Label>
+                  <Input
+                    variant="secondary"
+                    placeholder="staff@clayjar.com.ph"
+                  />
+                  <FieldError />
+                </TextField>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <TextField
+                    name="staffPhone"
                     value={staffPhone}
-                    onChange={(e) => setStaffPhone(e.target.value)}
-                    placeholder="+63 917..."
-                    className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-foreground">
-                    Access Role
-                  </label>
-                  <select
-                    value={staffRole}
-                    onChange={(e) => setStaffRole(e.target.value as UserRole)}
-                    className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
+                    onChange={setStaffPhone}
                   >
-                    <option value="employee">Employee</option>
-                    <option value="super_admin">Super Admin</option>
-                  </select>
+                    <Label>Telephone</Label>
+                    <Input variant="secondary" placeholder="+63 917..." />
+                  </TextField>
+
+                  <Select
+                    variant="secondary"
+                    value={staffRole}
+                    onChange={(key) => key && setStaffRole(key as UserRole)}
+                  >
+                    <Label>Access Role</Label>
+                    <Select.Trigger>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        <ListBox.Item id="employee" textValue="Employee">
+                          Employee
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                        <ListBox.Item id="super_admin" textValue="Super Admin">
+                          Super Admin
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-foreground">
-                    Department
-                  </label>
-                  <input
+
+                <div className="grid grid-cols-2 gap-3">
+                  <TextField
+                    name="staffDept"
                     value={staffDept}
-                    onChange={(e) => setStaffDept(e.target.value)}
-                    className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-foreground">
-                    Initial Password *
-                  </label>
-                  <input
-                    required
-                    type="password"
+                    onChange={setStaffDept}
+                  >
+                    <Label>Department</Label>
+                    <Input variant="secondary" />
+                  </TextField>
+
+                  <TextField
+                    isRequired
                     minLength={8}
+                    name="staffPass"
                     value={staffPass}
-                    onChange={(e) => setStaffPass(e.target.value)}
-                    placeholder="Min. 8 characters"
-                    className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
-                  />
+                    onChange={setStaffPass}
+                  >
+                    <Label>Initial Password</Label>
+                    <InputGroup variant="secondary">
+                      <InputGroup.Input
+                        type={showStaffPass ? "text" : "password"}
+                        placeholder="Min. 8 chars"
+                      />
+                      <InputGroup.Suffix className="pe-0">
+                        <Button
+                          isIconOnly
+                          size="sm"
+                          variant="ghost"
+                          aria-label={
+                            showStaffPass ? "Hide password" : "Show password"
+                          }
+                          onPress={() => setShowStaffPass((prev) => !prev)}
+                        >
+                          {showStaffPass ? (
+                            <Eye className="size-4" />
+                          ) : (
+                            <EyeSlash className="size-4" />
+                          )}
+                        </Button>
+                      </InputGroup.Suffix>
+                    </InputGroup>
+                    <FieldError />
+                  </TextField>
                 </div>
-              </div>
-              <Button
-                type="submit"
-                variant="primary"
-                fullWidth
-                isDisabled={creatingStaff}
-              >
-                {creatingStaff ? "Provisioning..." : "Provision Account"}
-              </Button>
-            </form>
+
+                <Button
+                  type="submit"
+                  variant="primary"
+                  fullWidth
+                  isPending={creatingStaff}
+                >
+                  {({ isPending }) => (
+                    <>
+                      {isPending ? (
+                        <Spinner color="current" size="sm" />
+                      ) : (
+                        <PersonPlus className="size-4" />
+                      )}
+                      {isPending ? "Provisioning..." : "Provision Account"}
+                    </>
+                  )}
+                </Button>
+              </Form>
+            </Card.Content>
           </Card>
 
-          <Card className="border border-separator bg-surface p-6 space-y-4 lg:col-span-7">
-            <h2 className="text-base font-semibold text-foreground tabular-nums">
-              Account Directory ({users.length})
-            </h2>
-            <div className="divide-y divide-separator">
-              {users.map((u) => (
-                <div
-                  key={u.id}
-                  className="flex flex-wrap items-center justify-between gap-3 py-3 text-xs"
-                >
-                  <div>
+          <Card className="p-6 lg:col-span-7">
+            <Card.Header>
+              <Card.Title className="text-base tabular-nums">
+                Account Directory ({users.length})
+              </Card.Title>
+              <Card.Description>
+                Manage personnel role assignments and active workspace access.
+              </Card.Description>
+            </Card.Header>
+
+            <Card.Content className="space-y-3 pt-4">
+              {users.map((u) => {
+                const initials = u.fullName
+                  .split(" ")
+                  .map((n) => n[0])
+                  .slice(0, 2)
+                  .join("")
+                  .toUpperCase();
+                return (
+                  <Surface
+                    key={u.id}
+                    variant="secondary"
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-2xl p-3.5 text-xs"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Avatar size="sm">
+                        <Avatar.Fallback>{initials}</Avatar.Fallback>
+                      </Avatar>
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-medium text-foreground">
+                            {u.fullName}
+                          </span>
+                          <Chip
+                            size="sm"
+                            color={
+                              u.role === "super_admin"
+                                ? "warning"
+                                : u.role === "employee"
+                                  ? "accent"
+                                  : "default"
+                            }
+                            variant="soft"
+                          >
+                            <Chip.Label>{u.role.replace("_", " ")}</Chip.Label>
+                          </Chip>
+                          {!u.isActive && (
+                            <Chip size="sm" color="danger" variant="soft">
+                              <Chip.Label>Disabled</Chip.Label>
+                            </Chip>
+                          )}
+                        </div>
+                        <div className="mt-0.5 text-muted">
+                          {u.email}
+                          {u.department ? ` · ${u.department}` : ""}
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-foreground">
-                        {u.fullName}
-                      </span>
-                      <Chip
-                        size="sm"
-                        color={
-                          u.role === "super_admin"
-                            ? "warning"
-                            : u.role === "employee"
-                              ? "accent"
-                              : "default"
-                        }
-                        variant="soft"
+                      <Select
+                        aria-label={`Role for ${u.fullName}`}
+                        className="w-36"
+                        isDisabled={u.id === currentUser.id}
+                        value={u.role}
+                        onChange={(key) => {
+                          if (key) {
+                            void upsertUser({
+                              ...u,
+                              role: key as UserRole,
+                            });
+                          }
+                        }}
                       >
-                        {u.role.replace("_", " ")}
-                      </Chip>
-                      {!u.isActive && (
-                        <Chip size="sm" color="danger" variant="soft">
-                          Disabled
-                        </Chip>
+                        <Select.Trigger>
+                          <Select.Value />
+                          <Select.Indicator />
+                        </Select.Trigger>
+                        <Select.Popover>
+                          <ListBox>
+                            <ListBox.Item id="customer" textValue="Customer">
+                              Customer
+                              <ListBox.ItemIndicator />
+                            </ListBox.Item>
+                            <ListBox.Item id="employee" textValue="Employee">
+                              Employee
+                              <ListBox.ItemIndicator />
+                            </ListBox.Item>
+                            <ListBox.Item
+                              id="super_admin"
+                              textValue="Super Admin"
+                            >
+                              Super Admin
+                              <ListBox.ItemIndicator />
+                            </ListBox.Item>
+                          </ListBox>
+                        </Select.Popover>
+                      </Select>
+
+                      {u.id !== currentUser.id && (
+                        <Button
+                          size="sm"
+                          variant={u.isActive ? "secondary" : "primary"}
+                          onPress={() =>
+                            void upsertUser({ ...u, isActive: !u.isActive })
+                          }
+                        >
+                          {u.isActive ? "Disable" : "Enable"}
+                        </Button>
                       )}
                     </div>
-                    <div className="mt-0.5 text-muted">
-                      {u.email}
-                      {u.department ? ` · ${u.department}` : ""}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={u.role}
-                      disabled={u.id === currentUser.id}
-                      onChange={(e) =>
-                        upsertUser({ ...u, role: e.target.value as UserRole })
-                      }
-                      className="h-8 rounded-md border border-separator bg-background px-2 text-foreground outline-none disabled:opacity-50"
-                    >
-                      <option value="customer">Customer</option>
-                      <option value="employee">Employee</option>
-                      <option value="super_admin">Super Admin</option>
-                    </select>
-
-                    {u.id !== currentUser.id && (
-                      <Button
-                        size="sm"
-                        variant={u.isActive ? "secondary" : "primary"}
-                        onPress={() =>
-                          upsertUser({ ...u, isActive: !u.isActive })
-                        }
-                      >
-                        {u.isActive ? "Disable" : "Enable"}
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+                  </Surface>
+                );
+              })}
+            </Card.Content>
           </Card>
         </Tabs.Panel>
 
         {/* ================================================================
             TAB 3: APPLICATION SETTINGS & SECURITY STATUS
         ================================================================ */}
-        <Tabs.Panel id="settings" className="space-y-6">
+        <Tabs.Panel id="settings" className="space-y-6 pt-5">
           {settingsSavedMsg && (
-            <div className="flex items-center gap-2 rounded-lg border border-separator bg-surface px-4 py-3 text-xs font-medium text-foreground">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              <span>{settingsSavedMsg}</span>
-            </div>
+            <Alert status="success">
+              <Alert.Indicator />
+              <Alert.Content>
+                <Alert.Title>Configuration Saved</Alert.Title>
+                <Alert.Description>{settingsSavedMsg}</Alert.Description>
+              </Alert.Content>
+            </Alert>
           )}
           {settingsErrorMsg && (
-            <div className="flex items-center gap-2 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-xs text-danger">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>{settingsErrorMsg}</span>
-            </div>
+            <Alert status="danger">
+              <Alert.Indicator />
+              <Alert.Content>
+                <Alert.Title>Update Failed</Alert.Title>
+                <Alert.Description>{settingsErrorMsg}</Alert.Description>
+              </Alert.Content>
+            </Alert>
           )}
 
           <div className="grid gap-6 lg:grid-cols-12">
-            <Card className="border border-separator bg-surface p-6 lg:col-span-8">
-              <form onSubmit={handleSaveSettings} className="space-y-5">
-                <div className="flex items-center justify-between border-b border-separator pb-4">
+            <Card className="p-6 lg:col-span-8">
+              <Form
+                onSubmit={handleSaveSettings}
+                className="flex flex-col gap-5"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <h2 className="text-base font-semibold text-foreground">
+                    <Card.Title className="text-lg">
                       Global Commercial & Studio Settings
-                    </h2>
-                    <p className="text-xs text-muted">
+                    </Card.Title>
+                    <Card.Description>
                       Controls studio identity, tax rate, reference prefixes,
                       settlement instructions, and queue routing.
-                    </p>
+                    </Card.Description>
                   </div>
                   <Button
                     type="submit"
                     size="sm"
                     variant="primary"
-                    isDisabled={savingSettings}
+                    isPending={savingSettings}
                   >
-                    <Save className="h-3.5 w-3.5" />
-                    {savingSettings ? "Saving..." : "Save Settings"}
+                    {({ isPending }) => (
+                      <>
+                        {isPending ? (
+                          <Spinner color="current" size="sm" />
+                        ) : (
+                          <FloppyDisk className="size-3.5" />
+                        )}
+                        {isPending ? "Saving..." : "Save Settings"}
+                      </>
+                    )}
                   </Button>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-foreground">
-                      Studio Name
-                    </label>
-                    <input
-                      required
-                      value={settingsForm.shopName}
-                      onChange={(e) =>
-                        setSettingsForm((p) => ({
-                          ...p,
-                          shopName: e.target.value,
-                        }))
-                      }
-                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
-                    />
-                  </div>
+                <Separator />
 
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-foreground">
-                      Tagline
-                    </label>
-                    <input
-                      value={settingsForm.tagline}
-                      onChange={(e) =>
-                        setSettingsForm((p) => ({
-                          ...p,
-                          tagline: e.target.value,
-                        }))
-                      }
-                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
-                    />
-                  </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <TextField
+                    isRequired
+                    value={settingsForm.shopName}
+                    onChange={(val) =>
+                      setSettingsForm((p) => ({ ...p, shopName: val }))
+                    }
+                  >
+                    <Label>Studio Name</Label>
+                    <Input variant="secondary" />
+                  </TextField>
+
+                  <TextField
+                    value={settingsForm.tagline}
+                    onChange={(val) =>
+                      setSettingsForm((p) => ({ ...p, tagline: val }))
+                    }
+                  >
+                    <Label>Tagline</Label>
+                    <Input variant="secondary" />
+                  </TextField>
                 </div>
 
                 {/* Currency, Tax, Validity */}
                 <div className="grid gap-4 sm:grid-cols-3 tabular-nums">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-foreground">
-                      Settlement Currency
-                    </label>
-                    <select
-                      value={settingsForm.currencyCode}
-                      onChange={(e) => {
-                        const found = CURRENCY_PRESETS.find(
-                          (c) => c.code === e.target.value
-                        );
-                        if (found) {
-                          setSettingsForm((p) => ({
-                            ...p,
-                            currencyCode: found.code,
-                            currencySymbol: found.symbol,
-                          }));
-                        }
-                      }}
-                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
-                    >
-                      {CURRENCY_PRESETS.map((c) => (
-                        <option key={c.code} value={c.code}>
-                          {c.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-foreground">
-                      VAT / Tax Rate (%)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      min={0}
-                      value={settingsForm.taxRate}
-                      onChange={(e) =>
+                  <Select
+                    variant="secondary"
+                    value={settingsForm.currencyCode}
+                    onChange={(key) => {
+                      const found = CURRENCY_PRESETS.find(
+                        (c) => c.code === String(key)
+                      );
+                      if (found) {
                         setSettingsForm((p) => ({
                           ...p,
-                          taxRate: Number.parseFloat(e.target.value || "0"),
-                        }))
+                          currencyCode: found.code,
+                          currencySymbol: found.symbol,
+                        }));
                       }
-                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 font-mono text-sm text-foreground outline-none focus:border-accent"
-                    />
-                  </div>
+                    }}
+                  >
+                    <Label>Settlement Currency</Label>
+                    <Select.Trigger>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        {CURRENCY_PRESETS.map((c) => (
+                          <ListBox.Item
+                            key={c.code}
+                            id={c.code}
+                            textValue={c.label}
+                          >
+                            {c.label}
+                            <ListBox.ItemIndicator />
+                          </ListBox.Item>
+                        ))}
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
 
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-foreground">
-                      Quotation Validity (Days)
-                    </label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={settingsForm.quotationValidityDays}
-                      onChange={(e) =>
-                        setSettingsForm((p) => ({
-                          ...p,
-                          quotationValidityDays: Number.parseInt(
-                            e.target.value || "14",
-                            10
-                          ),
-                        }))
-                      }
-                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 font-mono text-sm text-foreground outline-none focus:border-accent"
-                    />
-                  </div>
+                  <NumberField
+                    minValue={0}
+                    step={0.5}
+                    variant="secondary"
+                    value={settingsForm.taxRate}
+                    onChange={(v) =>
+                      !Number.isNaN(v) &&
+                      setSettingsForm((p) => ({ ...p, taxRate: v }))
+                    }
+                  >
+                    <Label>VAT / Tax Rate (%)</Label>
+                    <NumberField.Group>
+                      <NumberField.DecrementButton />
+                      <NumberField.Input />
+                      <NumberField.IncrementButton />
+                    </NumberField.Group>
+                  </NumberField>
+
+                  <NumberField
+                    minValue={1}
+                    step={1}
+                    variant="secondary"
+                    value={settingsForm.quotationValidityDays}
+                    onChange={(v) =>
+                      !Number.isNaN(v) &&
+                      setSettingsForm((p) => ({
+                        ...p,
+                        quotationValidityDays: v,
+                      }))
+                    }
+                  >
+                    <Label>Quote Validity (Days)</Label>
+                    <NumberField.Group>
+                      <NumberField.DecrementButton />
+                      <NumberField.Input />
+                      <NumberField.IncrementButton />
+                    </NumberField.Group>
+                  </NumberField>
                 </div>
 
                 {/* Reference Number Prefixes */}
                 <div className="grid gap-4 sm:grid-cols-3">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-foreground">
-                      Order Prefix
-                    </label>
-                    <input
-                      value={settingsForm.orderPrefix}
-                      onChange={(e) =>
-                        setSettingsForm((p) => ({
-                          ...p,
-                          orderPrefix: e.target.value.toUpperCase(),
-                        }))
-                      }
-                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 font-mono text-sm text-foreground outline-none focus:border-accent"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-foreground">
-                      Quotation Prefix
-                    </label>
-                    <input
-                      value={settingsForm.quotePrefix}
-                      onChange={(e) =>
-                        setSettingsForm((p) => ({
-                          ...p,
-                          quotePrefix: e.target.value.toUpperCase(),
-                        }))
-                      }
-                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 font-mono text-sm text-foreground outline-none focus:border-accent"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-foreground">
-                      Ticket Prefix
-                    </label>
-                    <input
-                      value={settingsForm.ticketPrefix}
-                      onChange={(e) =>
-                        setSettingsForm((p) => ({
-                          ...p,
-                          ticketPrefix: e.target.value.toUpperCase(),
-                        }))
-                      }
-                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 font-mono text-sm text-foreground outline-none focus:border-accent"
-                    />
-                  </div>
+                  <TextField
+                    value={settingsForm.orderPrefix}
+                    onChange={(val) =>
+                      setSettingsForm((p) => ({
+                        ...p,
+                        orderPrefix: val.toUpperCase(),
+                      }))
+                    }
+                  >
+                    <Label>Order Prefix</Label>
+                    <Input variant="secondary" className="font-mono" />
+                  </TextField>
+
+                  <TextField
+                    value={settingsForm.quotePrefix}
+                    onChange={(val) =>
+                      setSettingsForm((p) => ({
+                        ...p,
+                        quotePrefix: val.toUpperCase(),
+                      }))
+                    }
+                  >
+                    <Label>Quotation Prefix</Label>
+                    <Input variant="secondary" className="font-mono" />
+                  </TextField>
+
+                  <TextField
+                    value={settingsForm.ticketPrefix}
+                    onChange={(val) =>
+                      setSettingsForm((p) => ({
+                        ...p,
+                        ticketPrefix: val.toUpperCase(),
+                      }))
+                    }
+                  >
+                    <Label>Ticket Prefix</Label>
+                    <Input variant="secondary" className="font-mono" />
+                  </TextField>
                 </div>
 
                 {/* Contact & Shop Info */}
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-foreground">
-                      Contact Email
-                    </label>
-                    <input
-                      value={settingsForm.contactEmail}
-                      onChange={(e) =>
-                        setSettingsForm((p) => ({
-                          ...p,
-                          contactEmail: e.target.value,
-                        }))
-                      }
-                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-foreground">
-                      Telephone
-                    </label>
-                    <input
-                      value={settingsForm.contactPhone}
-                      onChange={(e) =>
-                        setSettingsForm((p) => ({
-                          ...p,
-                          contactPhone: e.target.value,
-                        }))
-                      }
-                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 font-mono text-xs text-foreground outline-none focus:border-accent"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-foreground">
-                      Studio Address
-                    </label>
-                    <input
-                      value={settingsForm.shopAddress}
-                      onChange={(e) =>
-                        setSettingsForm((p) => ({
-                          ...p,
-                          shopAddress: e.target.value,
-                        }))
-                      }
-                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-foreground">
-                      Operating Hours
-                    </label>
-                    <input
-                      value={settingsForm.businessHours}
-                      onChange={(e) =>
-                        setSettingsForm((p) => ({
-                          ...p,
-                          businessHours: e.target.value,
-                        }))
-                      }
-                      className="h-9 w-full rounded-lg border border-separator bg-background px-3 text-sm text-foreground outline-none focus:border-accent"
-                    />
-                  </div>
+                  <TextField
+                    value={settingsForm.contactEmail}
+                    onChange={(val) =>
+                      setSettingsForm((p) => ({ ...p, contactEmail: val }))
+                    }
+                  >
+                    <Label>Contact Email</Label>
+                    <Input variant="secondary" />
+                  </TextField>
+
+                  <TextField
+                    value={settingsForm.contactPhone}
+                    onChange={(val) =>
+                      setSettingsForm((p) => ({ ...p, contactPhone: val }))
+                    }
+                  >
+                    <Label>Telephone</Label>
+                    <Input variant="secondary" className="font-mono" />
+                  </TextField>
+
+                  <TextField
+                    value={settingsForm.shopAddress}
+                    onChange={(val) =>
+                      setSettingsForm((p) => ({ ...p, shopAddress: val }))
+                    }
+                  >
+                    <Label>Studio Address</Label>
+                    <Input variant="secondary" />
+                  </TextField>
+
+                  <TextField
+                    value={settingsForm.businessHours}
+                    onChange={(val) =>
+                      setSettingsForm((p) => ({ ...p, businessHours: val }))
+                    }
+                  >
+                    <Label>Operating Hours</Label>
+                    <Input variant="secondary" />
+                  </TextField>
                 </div>
 
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-foreground">
-                    Settlement & Production Terms
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={settingsForm.paymentInstructions}
-                    onChange={(e) =>
-                      setSettingsForm((p) => ({
-                        ...p,
-                        paymentInstructions: e.target.value,
-                      }))
-                    }
-                    className="w-full rounded-lg border border-separator bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
-                  />
-                </div>
+                <TextField
+                  value={settingsForm.paymentInstructions}
+                  onChange={(val) =>
+                    setSettingsForm((p) => ({
+                      ...p,
+                      paymentInstructions: val,
+                    }))
+                  }
+                >
+                  <Label>Settlement & Production Terms</Label>
+                  <TextArea variant="secondary" rows={2} />
+                </TextField>
 
                 {/* Chat Queue Routing */}
-                <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-separator bg-background p-4">
-                  <label className="flex items-center gap-2.5 text-xs font-medium text-foreground">
-                    <input
-                      type="checkbox"
-                      checked={settingsForm.autoAssignTickets}
-                      onChange={(e) =>
-                        setSettingsForm((p) => ({
-                          ...p,
-                          autoAssignTickets: e.target.checked,
-                        }))
-                      }
-                      className="h-4 w-4 accent-current"
-                    />
-                    Automatically assign incoming tickets to on-duty specialists
-                  </label>
+                <Surface
+                  variant="secondary"
+                  className="flex flex-wrap items-center justify-between gap-4 rounded-2xl p-4"
+                >
+                  <Switch
+                    isSelected={settingsForm.autoAssignTickets}
+                    onChange={(val) =>
+                      setSettingsForm((p) => ({
+                        ...p,
+                        autoAssignTickets: val,
+                      }))
+                    }
+                  >
+                    <Switch.Content className="text-xs font-medium">
+                      <Switch.Control>
+                        <Switch.Thumb />
+                      </Switch.Control>
+                      Automatically assign incoming tickets to on-duty
+                      specialists
+                    </Switch.Content>
+                  </Switch>
 
-                  <div className="flex items-center gap-2 text-xs tabular-nums">
-                    <span className="text-muted">Max active / staff:</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={20}
-                      value={settingsForm.maxActiveChatsPerEmployee}
-                      onChange={(e) =>
-                        setSettingsForm((p) => ({
-                          ...p,
-                          maxActiveChatsPerEmployee: Number.parseInt(
-                            e.target.value || "5",
-                            10
-                          ),
-                        }))
-                      }
-                      className="h-8 w-16 rounded-md border border-separator bg-surface px-2 text-center font-mono font-medium text-foreground outline-none focus:border-accent"
-                    />
-                  </div>
-                </div>
-              </form>
+                  <NumberField
+                    className="w-40"
+                    minValue={1}
+                    maxValue={20}
+                    step={1}
+                    value={settingsForm.maxActiveChatsPerEmployee}
+                    onChange={(v) =>
+                      !Number.isNaN(v) &&
+                      setSettingsForm((p) => ({
+                        ...p,
+                        maxActiveChatsPerEmployee: v,
+                      }))
+                    }
+                  >
+                    <Label>Max Active / Staff</Label>
+                    <NumberField.Group>
+                      <NumberField.DecrementButton />
+                      <NumberField.Input className="tabular-nums" />
+                      <NumberField.IncrementButton />
+                    </NumberField.Group>
+                  </NumberField>
+                </Surface>
+              </Form>
             </Card>
 
             {/* Live Database & Security Posture Card */}
-            <Card className="border border-separator bg-surface p-6 space-y-4 lg:col-span-4 h-fit">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-foreground">
+            <Card className="h-fit p-6 lg:col-span-4">
+              <Card.Header className="flex-row items-center justify-between">
+                <Card.Title className="text-base">
                   Database & Security Posture
-                </span>
+                </Card.Title>
                 <Chip
                   size="sm"
                   color={supabaseConnected ? "success" : "danger"}
                   variant="soft"
                 >
-                  {supabaseConnected ? "Connected" : "Offline"}
+                  <CircleFill width={6} />
+                  <Chip.Label>
+                    {supabaseConnected ? "Connected" : "Offline"}
+                  </Chip.Label>
                 </Chip>
-              </div>
-              <div className="divide-y divide-separator rounded-lg border border-separator bg-background px-3.5 text-xs tabular-nums">
-                <div className="flex justify-between py-2.5">
-                  <span className="text-muted">Published Products</span>
-                  <span className="font-mono font-medium text-foreground">
-                    {products.length}
-                  </span>
-                </div>
-                <div className="flex justify-between py-2.5">
-                  <span className="text-muted">Size Schedules</span>
-                  <span className="font-mono font-medium text-foreground">
-                    {products.reduce((acc, p) => acc + p.sizes.length, 0)}
-                  </span>
-                </div>
-                <div className="flex justify-between py-2.5">
-                  <span className="text-muted">Quotations</span>
-                  <span className="font-mono font-medium text-foreground">
-                    {inquiries.length}
-                  </span>
-                </div>
-                <div className="flex justify-between py-2.5">
-                  <span className="text-muted">Production Orders</span>
-                  <span className="font-mono font-medium text-foreground">
-                    {orders.length}
-                  </span>
-                </div>
-                <div className="flex justify-between py-2.5">
-                  <span className="text-muted">Support Tickets</span>
-                  <span className="font-mono font-medium text-foreground">
-                    {tickets.length}
-                  </span>
-                </div>
-                <div className="flex justify-between py-2.5">
-                  <span className="text-muted">Registered Accounts</span>
-                  <span className="font-mono font-medium text-foreground">
-                    {users.length}
-                  </span>
-                </div>
-              </div>
-              <p className="text-xs leading-relaxed text-muted">
-                Protected by PostgreSQL Row Level Security, server-side pricing
-                RPCs, non-enumerable CSPRNG reference codes, and HTTP Content
-                Security Policy headers.
-              </p>
+              </Card.Header>
+
+              <Card.Content className="space-y-4 pt-4">
+                <Surface
+                  variant="secondary"
+                  className="rounded-2xl p-4 space-y-2.5 text-xs tabular-nums"
+                >
+                  <div className="flex justify-between">
+                    <span className="text-muted">Published Products</span>
+                    <span className="font-mono font-medium text-foreground">
+                      {products.length}
+                    </span>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between">
+                    <span className="text-muted">Size Schedules</span>
+                    <span className="font-mono font-medium text-foreground">
+                      {products.reduce((acc, p) => acc + p.sizes.length, 0)}
+                    </span>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between">
+                    <span className="text-muted">Quotations</span>
+                    <span className="font-mono font-medium text-foreground">
+                      {inquiries.length}
+                    </span>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between">
+                    <span className="text-muted">Production Orders</span>
+                    <span className="font-mono font-medium text-foreground">
+                      {orders.length}
+                    </span>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between">
+                    <span className="text-muted">Support Tickets</span>
+                    <span className="font-mono font-medium text-foreground">
+                      {tickets.length}
+                    </span>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between">
+                    <span className="text-muted">Registered Accounts</span>
+                    <span className="font-mono font-medium text-foreground">
+                      {users.length}
+                    </span>
+                  </div>
+                </Surface>
+                <p className="text-xs leading-relaxed text-muted">
+                  Protected by PostgreSQL Row Level Security, server-side
+                  pricing RPCs, non-enumerable CSPRNG reference codes, and HTTP
+                  Content Security Policy headers.
+                </p>
+              </Card.Content>
             </Card>
           </div>
         </Tabs.Panel>

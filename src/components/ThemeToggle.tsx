@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
-import { Button } from "@heroui/react";
-import { Moon, Sun } from "lucide-react";
+import { Moon, Sun } from "@gravity-ui/icons";
+import { Button, Tooltip } from "@heroui/react";
 
 export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
@@ -16,12 +16,12 @@ export function ThemeToggle() {
   if (!mounted) {
     return (
       <Button
-        variant="ghost"
+        variant="tertiary"
         size="sm"
         isIconOnly
-        aria-label="Toggle color mode"
+        aria-label="Toggle color theme"
       >
-        <Sun className="h-4 w-4 text-muted" />
+        <Sun className="size-4 text-muted" />
       </Button>
     );
   }
@@ -29,18 +29,23 @@ export function ThemeToggle() {
   const isDark = resolvedTheme === "dark";
 
   return (
-    <Button
-      variant="ghost"
-      size="sm"
-      isIconOnly
-      aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      onPress={() => setTheme(isDark ? "light" : "dark")}
-    >
-      {isDark ? (
-        <Sun className="h-4 w-4 text-foreground" />
-      ) : (
-        <Moon className="h-4 w-4 text-foreground" />
-      )}
-    </Button>
+    <Tooltip delay={0}>
+      <Button
+        variant="tertiary"
+        size="sm"
+        isIconOnly
+        aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+        onPress={() => setTheme(isDark ? "light" : "dark")}
+      >
+        {isDark ? (
+          <Sun className="size-4 text-foreground" />
+        ) : (
+          <Moon className="size-4 text-foreground" />
+        )}
+      </Button>
+      <Tooltip.Content>
+        <p>{isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}</p>
+      </Tooltip.Content>
+    </Tooltip>
   );
 }
